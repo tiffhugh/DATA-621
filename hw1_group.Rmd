@@ -1,0 +1,59 @@
+---
+title: "hw1"
+author: "Bedros, Haig; Dela Cruz, Sandra; Hugh, Tiffany; Li, Yanyi"
+date: "2025-02-16"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(knitr)
+library(DataExplorer)
+library(readr)
+#upload training data set
+moneyball_training_data <- read_csv()
+```
+
+```{r}
+# preview of training data
+head(moneyball_training_data)
+
+# check dimensions of the data set
+dim(moneyball_training_data)
+```
+
+For our moneyball training data set we have 2276 observations and 17 columns. For easy exploration, let's describe the group of variables first, and exclude `INDEX` since we will not need it . Please see as follows:
+
+-   `TARGET_WINS` - our dependent variable
+
+-   `TEAM_BATTING` - refers to a team's offensive ability when hitting the ball
+
+-   `TEAM_BASERUN` - determines how efficiently a team navigates the bases after hitting the ball
+
+-   `TEAM_FIELDING` - is the defensive skill of catching and throwing the ball to record outs
+
+-   `TEAM_PITCHING` - represents the ability of a team's pitchers to throw strikes and prevent the opposing team from hitting the ball effectively
+
+```{r}
+# remove index variable in our dataset
+moneyball_training_data = moneyball_training_data[,-1]
+```
+
+Below is the summary of each of our individual variables, this includes the minimum, median, mean, and maximum values. With this we can easily spot that we have a minimum of zero on most of our variables, we can also see that we have a lot of missing values for some of our variables, are this going to be a concern for us? Let's find out.
+
+```{r}
+# let's get a summary of our data
+summary(moneyball_training_data)
+```
+
+To help us further with our exploration, let's have quick overview of our histogram and q-q plot to check for the normality of distribution of our data and to easily spot outliers that might suggest to fix our missing values or transform our variables later.
+
+```{r}
+# let's plot a histogram using DataExplorer library
+plot_histogram(moneyball_training_data)
+
+# let's plot a qq plot
+plot_qq(moneyball_training_data)
+```
+
+With an overview of both graphs, we can see that only some of the variables are normally distributed, let's say the variables `TEAM_BATTING_2B`, `TEAM_BATTING_HBP`, and `TEAM_FIELDING_DP`, the others are skewed to the right with reference to our histogram, either having a curve or a heavy tail with reference to our q-q plot.

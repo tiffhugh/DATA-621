@@ -5,19 +5,26 @@ date: "2025-02-16"
 output: html_document
 ---
 
-```{r}
+```{r warning=FALSE}
 library(tidyverse)
 library(knitr)
 library(DataExplorer)
 library(readr)
+```
+
+### Section 1: DATA EXPLORATION
+
+```{r}
 #upload training data set
-moneyball_training_data <- read_csv()
+moneyball_training_data <- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/moneyball-training-data.csv", show_col_types = FALSE)
 ```
 
 ```{r}
 # preview of training data
 head(moneyball_training_data)
+```
 
+```{r}
 # check dimensions of the data set
 dim(moneyball_training_data)
 ```
@@ -51,9 +58,63 @@ To help us further with our exploration, let's have quick overview of our histog
 ```{r}
 # let's plot a histogram using DataExplorer library
 plot_histogram(moneyball_training_data)
+```
 
+```{r warning=FALSE}
 # let's plot a qq plot
 plot_qq(moneyball_training_data)
 ```
 
 With an overview of both graphs, we can see that only some of the variables are normally distributed, let's say the variables `TEAM_BATTING_2B`, `TEAM_BATTING_HBP`, and `TEAM_FIELDING_DP`, the others are skewed to the right with reference to our histogram, either having a curve or a heavy tail with reference to our q-q plot.
+
+### Section 2: DATA PREPARATION
+
+```{r}
+# Find the total number of missing values in the dataset
+sum(is.na(moneyball_training_data))
+```
+
+The Money Ball training dataset has 3,478 missing values. Since the distributions are skewed, we will replace the missing values with the median.
+
+```{r}
+# Replace missing values with median for numerical variables
+moneyball_training_data <- moneyball_training_data %>%
+  mutate(across(where(is.numeric), ~replace_na(., median(., na.rm = TRUE))))
+```
+
+We categorized the teams based on the number of base hits by batters (1B, 2B, 3B, HR), where 1 represents the lowest and 4 represents the highest.
+
+```{r}
+# Create a new column for binning TEAM_BATTING_H (Total Hits) into quartiles
+moneyball_training_data <- moneyball_training_data %>%
+  mutate(TEAM_BATTING_H_BIN = ntile(TEAM_BATTING_H, 4))
+```
+
+```{r}
+# Check the number of teams in each bin for TEAM_BATTING_H (Total Hits)
+table(moneyball_training_data$TEAM_BATTING_H_BIN)
+```
+
+There are 569 records in each bin, distributed very evenly.
+
+We will apply the previous steps to a different column, specifically the number of wins.
+
+```{r}
+# Create a new column for binning TARGET_WINS (Number of wins) into quartiles
+moneyball_training_data <- moneyball_training_data %>%
+  mutate(TARGET_WINS_BIN = ntile(TARGET_WINS, 4))
+```
+
+```{r}
+# Check the number of teams in each bin for TEAM_BATTING_H (Total Hits)
+table(moneyball_training_data$TARGET_WINS_BIN)
+```
+
+Surprisingly, we can see that there are also 569 records in each bin.
+
+
+### Section 3: BUILD MODELS
+
+
+### Section 4: SELECT MODELS
+

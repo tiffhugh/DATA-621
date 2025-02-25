@@ -115,6 +115,76 @@ Surprisingly, we can see that there are also 569 records in each bin.
 
 ### Section 3: BUILD MODELS
 
+Below are three different multiple linear regression models developed to predict the number of wins.
+
+#### Model 1: Full Model
+
+We start by including all key variables that are expected to influence wins.
+
+```{r model1, echo=TRUE}
+model1 <- lm(TARGET_WINS ~ TEAM_BATTING_H + TEAM_BATTING_2B + TEAM_BATTING_3B + TEAM_BATTING_HR + TEAM_BATTING_BB + TEAM_BATTING_HBP + TEAM_BATTING_SO + TEAM_BASERUN_SB + TEAM_BASERUN_CS + TEAM_FIELDING_E + TEAM_FIELDING_DP +
+TEAM_PITCHING_BB + TEAM_PITCHING_H + TEAM_PITCHING_HR + TEAM_PITCHING_SO, data = moneyball_training_data)
+summary(model1)
+```
+
+### Key Points:
+
+- **Overall Fit:**  
+  - Adjusted R-squared is 0.311, indicating that about 31% of the variation in wins is explained by the model.  
+  - The overall model is statistically significant (F p < 2.2e-16).
+
+- **Significant Predictors:**  
+  - **Positive Effects:** TEAM_BATTING_H, TEAM_BATTING_3B, and TEAM_BASERUN_SB strongly predict higher wins.
+  - **Negative Effects:** TEAM_FIELDING_E and TEAM_FIELDING_DP are significant, suggesting that fewer errors and double plays boost wins. Additionally, TEAM_BATTING_SO negatively impacts wins, while TEAM_PITCHING_SO has a positive effect.
+
+### That means:
+- The model explains about 31% of the variation in wins.
+- More total hits, triples, and stolen bases are linked to more wins.
+- The coefficients mostly follow our expectations (e.g., a positive impact for home runs).
+- Fewer fielding errors and double plays are important for winning.
+- Batting strikeouts hurt the team, while more pitching strikeouts help.
+- Some variables (like doubles, home runs, hit-by-pitch, and caught stealing) are less important or not statistically significant.
+
+
+#### Model 2: Reduced Model
+
+Next, we simplify the model by removing variables that are not statistically significant or are redundant.
+
+```{r model2, echo=TRUE}
+model2 <- lm(TARGET_WINS ~ TEAM_BATTING_HR + TEAM_BASERUN_SB +
+              TEAM_FIELDING_E + TEAM_PITCHING_SO + TEAM_PITCHING_H,
+              data = moneyball_training_data)
+summary(model2)
+```
+### Key Points:
+
+- **Overall Fit:**  
+  - Adjusted R-squared is 0.1039, meaning about 10.4% of the variation in wins is explained by the model.  
+  - The overall model is statistically significant (F p < 2.2e-16).
+
+- **Significant Predictors:**  
+  - **Positive Effects:** TEAM_BATTING_HR, TEAM_BASERUN_SB, and TEAM_PITCHING_H are significantly linked to higher wins.  
+  - **Negative Effects:** TEAM_FIELDING_E and TEAM_PITCHING_SO show significant negative effects on wins.
+
+### That means:
+- The reduced model explains about 10% of the variation in wins.
+- More home runs and stolen bases are associated with more wins.
+- Better fielding (fewer errors) is important for winning.
+- The effects of pitching variables (more hits allowed predict higher wins while more strikeouts predict lower wins) are significant.
+
+
+#### Model 3: Model with Transformations/Interactions
+
+Finally, we experiment with transformations and interactions. Here, we create a new variable, *HR_Efficiency* (the ratio of home runs to total hits), and apply a log transformation to reduce skewness in stolen bases. We also include an interaction between home runs and pitching strikeouts.
+
+```{r model3, echo=TRUE}
+moneyball_training_data$HR_Efficiency <- moneyball_training_data$TEAM_BATTING_HR / moneyball_training_data$TEAM_BATTING_H
+model3 <- lm(TARGET_WINS ~ log(TEAM_BASERUN_SB + 1) + TEAM_FIELDING_E +
+              HR_Efficiency + TEAM_PITCHING_SO + TEAM_BATTING_HR * TEAM_PITCHING_SO,
+              data = moneyball_training_data)
+summary(model3)
+```
+
 
 ### Section 4: SELECT MODELS
 

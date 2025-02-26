@@ -84,17 +84,11 @@ The strongest positive correlations with wins are seen in TEAM_BATTING_H (+0.35)
 
 <h3>**Section 2: DATA PREPARATION**</h3>
 
-The Money ball training dataset has a total of 3,478 missing values. We will replace the missing values with the median since the distributions are skewed.
+From our data exploration, we found that our moneyball training dataset has a total of 3,478 missing values. We replaced these missing values with their respective median values, since the distributions are skewed. Using the median is beneficial because it is less sensitive to extremes or outliers, helping maintain the natural spread and variability of the data. This approach avoids overestimating the performance of the players. In reality, it represents the typical player’s performance, whereas using mean might shift the data on levels that do not accurately reflect the majority of players.
 
-_Transforming data by putting it into buckets_
+To better understand the data, we categorized the teams into four quartiles based on their total number of wins. Quartile 1 represents the lowest number of wins, while Quartile 4 represents the highest. This approach makes it easier to analyze each team’s performance and determine which tier they belong to. Interestingly, we can see that there are also 569 records in each bin.
 
-We categorized the teams into four quartiles based on their total number of wins. Quartile 1 represents the lowest number of wins, while Quartile 4 represents the highest. This approach makes it easier to analyze each team's performance and determine which tier they belong to.
-
-Surprisingly, we can see that there are also 569 records in each bin.
-
-_Adding new variable HR_Efficiency_
-
-Next, we will introduce a new variable called HR_efficiency. This variable is calculated by dividing the number of home runs by batters by the total number of base hits by batters. This calculation provides us with the ratio of home runs to total hits.
+In order to assess how efficiently a player turns their at-bat (which represents a batter's turn to hit, including results such as a hit, walk, strikeout, or foul ball) into home runs, we introduced a new variable called HR_efficiency. This variable measures the ratio of home runs to total base hits for batters, calculated by dividing the number of home runs by the total number of base hits. By interpreting this metric, the higher the value, the more efficient the player is at hitting home runs. HR_efficiency can be an important indicator of a player's power-hitting ability.
 
 <h3>**Section 3: BUILD MODELS**</h3>
 

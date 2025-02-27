@@ -28,16 +28,19 @@ knitr::opts_chunk$set(
 	echo = FALSE,
 	message = TRUE,
 	warning = TRUE)
-#install.packages(c("tidyverse", "knitr", "readr","DataExplorer"))
+#install.packages(c("tidyverse", "knitr", "readr","DataExplorer","ggplot2", "reshape2"))
 library(tidyverse)
-#library(knitr)
+library(knitr)
 library(DataExplorer)
 library(readr)
+library(ggplot2)
+library(reshape2)
+
 #training data 
-moneyball_training_data <- read_csv("moneyball-training-data.csv")
+moneyball_training_data <- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/moneyball-training-data.csv", show_col_types = FALSE)
 View(moneyball_training_data)
 #evaluation data 
-moneyball_evaluation_data <- read_csv("moneyball-evaluation-data.csv")
+moneyball_evaluation_data <- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/moneyball-evaluation-data.csv", show_col_types = FALSE)
 View(moneyball_evaluation_data)
 ```
 

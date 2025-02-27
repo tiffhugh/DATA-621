@@ -84,9 +84,37 @@ The strongest positive correlations with wins are seen in TEAM_BATTING_H (+0.35)
 
 <h3>**Section 2: DATA PREPARATION**</h3>
 
+```{r setup10, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = TRUE,
+	warning = TRUE)
+sum(is.na(moneyball_training_data))
+moneyball_training_data <- moneyball_training_data %>%
+  mutate(across(where(is.numeric), ~replace_na(., median(., na.rm = TRUE))))
+```
+
 From our data exploration, we found that our moneyball training dataset has a total of 3,478 missing values. We replaced these missing values with their respective median values, since the distributions are skewed. Using the median is beneficial because it is less sensitive to extremes or outliers, helping maintain the natural spread and variability of the data. This approach avoids overestimating the performance of the players. In reality, it represents the typical player’s performance, whereas using mean might shift the data on levels that do not accurately reflect the majority of players.
 
+```{r setup11, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = TRUE,
+	warning = TRUE)
+sum(is.na(moneyball_training_data))
+moneyball_training_data <- moneyball_training_data %>%
+  mutate(across(where(is.numeric), ~replace_na(., median(., na.rm = TRUE))))
+```
+
 To better understand the data, we categorized the teams into four quartiles based on their total number of wins. Quartile 1 represents the lowest number of wins, while Quartile 4 represents the highest. This approach makes it easier to analyze each team’s performance and determine which tier they belong to. Interestingly, we can see that there are also 569 records in each bin.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = TRUE,
+	warning = TRUE)
+moneyball_training_data$HR_Efficiency <- moneyball_training_data$TEAM_BATTING_HR / moneyball_training_data$TEAM_BATTING_H
+```
 
 In order to assess how efficiently a player turns their at-bat (which represents a batter's turn to hit, including results such as a hit, walk, strikeout, or foul ball) into home runs, we introduced a new variable called HR_efficiency. This variable measures the ratio of home runs to total base hits for batters, calculated by dividing the number of home runs by the total number of base hits. By interpreting this metric, the higher the value, the more efficient the player is at hitting home runs. HR_efficiency can be an important indicator of a player's power-hitting ability.
 
@@ -133,15 +161,6 @@ _Interpretation_
   - Some variables (like doubles, home runs, hit-by-pitch, and caught stealing) are less important or not statistically significant.
 
 <h4>**Model 2: Reduced Model**</h4>
-
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(
-	echo = FALSE,
-	message = TRUE,
-	warning = TRUE)
-moneyball_training_data$HR_Efficiency <- moneyball_training_data$TEAM_BATTING_HR / moneyball_training_data$TEAM_BATTING_H
-```
 
 Next, we simplify the model by removing variables that are not statistically significant or are redundant.
 ```{r setup4, include=TRUE}

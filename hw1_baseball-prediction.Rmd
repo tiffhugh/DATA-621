@@ -83,40 +83,62 @@ Our goal is to predict the team's target wins, so analyzing correlations will he
 The strongest positive correlations with wins are seen in TEAM_BATTING_H (+0.35), TEAM_BATTING_BB (+0.30), and TEAM_BATTING_2B (+0.26), indicating that hits, walks, and doubles contribute significantly to scoring runs. Conversely, TEAM_FIELDING_E (-0.17) and TEAM_PITCHING_H (-0.08) show negative correlations, suggesting that poor defense and allowing more hits can reduce wins. Weak correlations, such as TEAM_BATTING_SO (-0.03) and TEAM_FIELDING_DP (-0.03), indicate that strikeouts and double plays have little impact. For model building, TEAM_BATTING_H, TEAM_BATTING_BB, TEAM_BATTING_2B, TEAM_BATTING_HR, and TEAM_PITCHING_HR should be prioritized as key predictive features.
 
 <h3>**Section 2: DATA PREPARATION**</h3>
+### Section 2: DATA PREPARATION
 
-```{r setup10, include=FALSE}
-knitr::opts_chunk$set(
-	echo = FALSE,
-	message = TRUE,
-	warning = TRUE)
-sum(is.na(moneyball_training_data))
-moneyball_training_data <- moneyball_training_data %>%
-  mutate(across(where(is.numeric), ~replace_na(., median(., na.rm = TRUE))))
+```{r echo=FALSE}
+# Find the total number of missing values in the dataset
+cat("Find the total number of missing values in the dataset: ", sum(is.na(moneyball_training_data)), "\n")
 ```
 
 From our data exploration, we found that our moneyball training dataset has a total of 3,478 missing values. We replaced these missing values with their respective median values, since the distributions are skewed. Using the median is beneficial because it is less sensitive to extremes or outliers, helping maintain the natural spread and variability of the data. This approach avoids overestimating the performance of the players. In reality, it represents the typical player’s performance, whereas using mean might shift the data on levels that do not accurately reflect the majority of players.
 
-```{r setup11, include=FALSE}
-knitr::opts_chunk$set(
-	echo = FALSE,
-	message = TRUE,
-	warning = TRUE)
-sum(is.na(moneyball_training_data))
+```{r}
+# Replace missing values with median for numerical variables
+cat("Replace missing values with median for numerical variables: \n")
 moneyball_training_data <- moneyball_training_data %>%
   mutate(across(where(is.numeric), ~replace_na(., median(., na.rm = TRUE))))
+
+cor_matrix <- cor(moneyball_training_data, use = "complete.obs")
+cor_matrix["TARGET_WINS", ]
+
+cor_matrix <- cor(moneyball_training_data, use = "complete.obs")
+cor_melted <- melt(cor_matrix)
+
+ggplot(cor_melted, aes(Var1, Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  labs(title = "Correlation Matrix", fill = "Correlation")
 ```
 
-To better understand the data, we categorized the teams into four quartiles based on their total number of wins. Quartile 1 represents the lowest number of wins, while Quartile 4 represents the highest. This approach makes it easier to analyze each team’s performance and determine which tier they belong to. Interestingly, we can see that there are also 569 records in each bin.
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(
-	echo = FALSE,
-	message = TRUE,
-	warning = TRUE)
-moneyball_training_data$HR_Efficiency <- moneyball_training_data$TEAM_BATTING_HR / moneyball_training_data$TEAM_BATTING_H
+To better understand the data, we categorized the teams into four quartiles based on their total number of wins. Quartile 1 represents the lowest number of wins, while Quartile 4 represents the highest.
+```{r echo=FALSE}
+# Create a new column for binning TARGET_WINS (Number of wins) into quartiles
+moneyball_training_data <- moneyball_training_data %>%
+  mutate(TARGET_WINS_BIN = ntile(TARGET_WINS, 4))
+
+cat("Here's an overiew of the new column created:\n")
+head(moneyball_training_data[, c("TARGET_WINS", "TARGET_WINS_BIN")])
+```
+
+This approach makes it easier to analyze each team’s performance and determine which tier they belong to. Interestingly, we can see that there are also 569 records in each bin.
+
+```{r echo=FALSE}
+# Check the number of teams in each bin for TARGET_WINS (Number of wins)
+cat("Check the number of teams in each bin for TARGET_WINS (Number of wins): \n")
+table(moneyball_training_data$TARGET_WINS_BIN)
 ```
 
 In order to assess how efficiently a player turns their at-bat (which represents a batter's turn to hit, including results such as a hit, walk, strikeout, or foul ball) into home runs, we introduced a new variable called HR_efficiency. This variable measures the ratio of home runs to total base hits for batters, calculated by dividing the number of home runs by the total number of base hits. By interpreting this metric, the higher the value, the more efficient the player is at hitting home runs. HR_efficiency can be an important indicator of a player's power-hitting ability.
+
+```{r echo=FALSE}
+moneyball_training_data$HR_Efficiency <- moneyball_training_data$TEAM_BATTING_HR / moneyball_training_data$TEAM_BATTING_H
+
+cat("Here's an overiew of the new column created:\n")
+head(moneyball_training_data[, c("TEAM_BATTING_HR", "TEAM_BATTING_H", "HR_Efficiency")])
+```
 
 <h3>**Section 3: BUILD MODELS**</h3>
 

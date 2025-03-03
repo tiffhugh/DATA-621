@@ -1,10 +1,27 @@
 ---
-title: "hw2"
+title: "HW2"
 author: "Bedros, Haig; Dela Cruz, Sandra; Hugh, Tiffany; Li, Yanyi"
-date: "2025-03-02"
-output: html_document
-        pdf_document
+date: "`r Sys.Date()`"
+format: html
 ---
+<style type="text/css">
+
+h1.title {
+  font-size: 26px;
+  color: Black;
+  text-align: center;
+}
+h4.author { 
+  font-size: 18px;
+  color: Black;
+  text-align: center;
+}
+h4.date {
+  font-size: 12px;
+  color: Black;
+  text-align: center;
+}
+</style>
 
 ```{r message=FALSE, warning=FALSE}
 library(tidyverse)

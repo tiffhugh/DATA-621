@@ -1,0 +1,164 @@
+---
+title: "HW2"
+author: "Bedros, Haig; Dela Cruz, Sandra; Hugh, Tiffany; Li, Yanyi"
+date: "`r Sys.Date()`"
+format: html
+---
+<style type="text/css">
+
+h1.title {
+  font-size: 26px;
+  color: Black;
+  text-align: center;
+}
+h4.author { 
+  font-size: 18px;
+  color: Black;
+  text-align: center;
+}
+h4.date {
+  font-size: 12px;
+  color: Black;
+  text-align: center;
+}
+</style>
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(caret)
+library(pROC)
+```
+
+```{=html}
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[','\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+});
+</script>
+```
+
+```{=html}
+<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+```
+
+### DATA EXPLORATION
+
+```{r}
+# Import data
+data <- read.csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/classification-output-data.csv")
+glimpse(data)
+```
+
+```{r}
+# Creating Confusion Matrix Using table() Function
+conf_matrix <- table(Predicted = data$scored.class, Actual = data$class)
+print(conf_matrix)
+```
+
+**2. Do the rows represent the actual or predicted class? The columns?**
+
+In the confusion matrix, the columns labeled "Actual" represent the true labels from the dataset, while the rows labeled "Predicted" indicate the model's predictions. This means that the model correctly predicted 119 true negatives, 27 true positives, made 5 false positive predictions, and had 30 false negative predictions.
+
+### Manually Creating Functions
+
+```{r}
+# Extracting values from the confusion matrix
+  TP <- conf_matrix[2,2]  # True Positives
+  TN <- conf_matrix[1,1]  # True Negatives
+  FP <- conf_matrix[2,1]  # False Positives
+  FN <- conf_matrix[1,2]  # False Negatives
+```
+
+**3. The function for Accuracy of the model:**
+
+```{r}
+accuracy = (TP+TN) / (TP+FP+TN+FN)
+print(accuracy)
+```
+
+80.66% accuracy means the model is correct about 80.7% of the time.
+
+**4. The function for Classification Error Rate of the model:**
+
+```{r}
+class_error_rate = (FP+FN) / (TP+FP+TN+FN)
+print(class_error_rate)
+```
+
+19.34% classification error rate means the model misclassifies about 19.34% of the cases.
+
+**5. The function for Precision of the model:**
+
+```{r}
+precision = (TP) / (TP+FP)
+print(precision)
+```
+
+84.38% precision means that when the model predicts positive, it is correct 84.38% of the time.
+
+**6. The function for Sensitivity of the model:**
+
+```{r}
+sensitivity = (TP) / (TP+FN)
+print(sensitivity)
+```
+
+47.37% sensitivity means the model is identifying about 47.37% of actual positives.
+
+**7. The function for Specificity of the model:**
+
+```{r}
+specificity = (TN) / (TN+FP)
+print(specificity)
+```
+
+96% specificity means the model is very good at correctly identifying negatives.
+
+**8. The function for F1 score of the model:**
+
+```{r}
+f1_score = (2*precision*sensitivity) / (precision+sensitivity)
+print(f1_score)
+```
+
+60.7% means the model has a moderate balance between precision and sensitivity.
+
+**9. Before we move on, let’s consider a question that was asked: What are the bounds on the F1 score? Show that the F1 score will always be between 0 and 1. (Hint: If 0 \< 𝑎 \< 1 and 0 \< 𝑏 \< 1 then 𝑎𝑏 \< 𝑎.)**
+
+The F1 Score is a measure of a test's accuracy, specifically a balance between precision and sensitivity. **Precision** is the ratio of true positives (TP) to the total number of predicted positives (TP + FP), and **sensitivity** is the ratio of true positives (TP) to the total number of actual positives (TP +FN).
+
+Let's see why F1 score will always be between 0 and 1:
+
+-   **Bounds on Precision and Recall:** Precision and sensitivity are both ratios, which means their values must alwasys be between 0 and 1. Therefore:
+
+    -   0 ≤ Precision ≤ 1
+    -   0 ≤ Recall ≤1
+
+-   **Upper Bound (F1 ≤ 1)**: The maximum possible value for the F1 score occurs when both precision and sensitivity are equal to 1. In that case, the F1 score reaches its upper bound of 1. To illustrate: $$
+    F_1 = \frac{2 \cdot Precision \cdot Sensitivity}{Precision + Sensitivity}
+    $$ If both precision and recall are equal to 1, we get: $$
+    F_1 = \frac{2 \cdot 1 \cdot 1}{1 + 1} = \frac{2}{2} = 1 
+    $$ Thus, F1 = 1 is the upper bound.
+
+-   **Lower Bound (F1 ≥ 0)**: If either precision and sensitivity is 0, the F1 score will be 0.
+
+$$
+F_1 = \frac{2 \cdot 0 \cdot 1}{0 + 1} = 0
+$$ or $$
+F_1 = \frac{2 \cdot 1 \cdot 0}{1 + 0} = 0
+$$ Hence, **F1 = 0** is the lower bound.
+
+Therefore, the F1 score is always between 0 and 1,
+
+$$
+0 ≤ F_1 ≤ 1
+$$

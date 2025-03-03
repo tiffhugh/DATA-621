@@ -162,3 +162,39 @@ Therefore, the F1 score is always between 0 and 1,
 $$
 0 ≤ F_1 ≤ 1
 $$
+
+**10. A function that generates ROC curve from a data set with a true classification column (class in our example) and a probability column (scored.probability in our example).**
+
+```{r}
+ROC <- function(x, y){
+  # order x by y in descending order
+  x <- x [order(y, decreasing = TRUE)]
+  
+  # calculate TP and FP rates
+  TP <- cumsum(x) / sum(x)
+  FP <- cumsum(!x) / sum(!x)
+  
+  # Prepare data for AUC calculation
+  df <- data.frame(TP, FP, x)
+  TP_df <- c(diff(df$TP), 0)
+  FP_df <- c(diff(df$FP), 0)
+  
+  #calculate AUC rounded to 4 decimal places
+  AUC <- round(sum(df$TP * FP_df) + sum(TP_df * FP_df)/ 2, 4)
+  
+  # Plot ROC curve
+  plot(df$FP, df$TP, type = "l",
+       col = "red",
+       main = "ROC Curve",
+       xlab = "False Positive Rate",
+       ylab = "True Positive Rate")
+  
+  # add diagonal line
+  abline(a = 0, b = 1, col = "grey", lty = 2)
+  
+  # add AUC legend
+  legend("bottomright", legend = paste("AUC = ", AUC), title = "AUC")
+}
+
+ROC(data$class, data$scored.probability)
+```

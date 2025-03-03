@@ -1,0 +1,236 @@
+---
+title: "hw1"
+author: "Bedros, Haig; Dela Cruz, Sandra; Hugh, Tiffany; Li, Yanyi"
+date: "2025-02-16"
+output: html_document
+---
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(knitr)
+library(DataExplorer)
+library(readr)
+```
+
+### Section 1: DATA EXPLORATION
+
+```{r}
+#upload training data set
+moneyball_training_data <- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/moneyball-training-data.csv", show_col_types = FALSE)
+```
+
+```{r}
+# preview of training data
+head(moneyball_training_data)
+```
+
+```{r}
+# check dimensions of the data set
+dim(moneyball_training_data)
+```
+
+```{r}
+#upload evaluation data set
+moneyball_evaluation_data <- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/moneyball-evaluation-data.csv", show_col_types = FALSE)
+```
+
+For our moneyball training data set we have 2276 observations and 17 columns. For easy exploration, let's describe the group of variables first, and exclude `INDEX` since we will not need it . Please see as follows:
+
+-   `TARGET_WINS` - our dependent variable
+
+-   `TEAM_BATTING` - refers to a team's offensive ability when hitting the ball
+
+-   `TEAM_BASERUN` - determines how efficiently a team navigates the bases after hitting the ball
+
+-   `TEAM_FIELDING` - is the defensive skill of catching and throwing the ball to record outs
+
+-   `TEAM_PITCHING` - represents the ability of a team's pitchers to throw strikes and prevent the opposing team from hitting the ball effectively
+
+```{r}
+# remove index variable in our dataset
+moneyball_training_data = moneyball_training_data[,-1]
+```
+
+Below is the summary of each of our individual variables, this includes the minimum, median, mean, and maximum values. With this we can easily spot that we have a minimum of zero on most of our variables, we can also see that we have a lot of missing values for some of our variables, are this going to be a concern for us? Let's find out.
+
+```{r}
+# let's get a summary of our data
+summary(moneyball_training_data)
+```
+
+To help us further with our exploration, let's have quick overview of our histogram and q-q plot to check for the normality of distribution of our data and to easily spot outliers that might suggest to fix our missing values or transform our variables later.
+
+```{r}
+# let's plot a histogram using DataExplorer library
+plot_histogram(moneyball_training_data)
+```
+
+```{r warning=FALSE}
+# let's plot a qq plot
+plot_qq(moneyball_training_data)
+```
+
+With an overview of both graphs, we can see that only some of the variables are normally distributed, let's say the variables `TEAM_BATTING_2B`, `TEAM_BATTING_HBP`, and `TEAM_FIELDING_DP`, the others are skewed to the right with reference to our histogram, either having a curve or a heavy tail with reference to our q-q plot.
+
+### Section 2: DATA PREPARATION
+
+```{r}
+# Find the total number of missing values in the dataset
+sum(is.na(moneyball_training_data))
+```
+
+From our data exploration, we found that our moneyball training dataset has a total of 3,478 missing values. We replaced these missing values with their respective median values, since the distributions are skewed. Using the median is beneficial because it is less sensitive to extremes or outliers, helping maintain the natural spread and variability of the data. This approach avoids overestimating the performance of the players. In reality, it represents the typical player’s performance, whereas using mean might shift the data on levels that do not accurately reflect the majority of players.
+
+```{r}
+# Replace missing values with median for numerical variables
+moneyball_training_data <- moneyball_training_data %>%
+  mutate(across(where(is.numeric), ~replace_na(., median(., na.rm = TRUE))))
+```
+
+To better understand the data, we categorized the teams into four quartiles based on their total number of wins. Quartile 1 represents the lowest number of wins, while Quartile 4 represents the highest. This approach makes it easier to analyze each team’s performance and determine which tier they belong to. Interestingly, we can see that there are also 569 records in each bin.
+
+```{r}
+# Create a new column for binning TARGET_WINS (Number of wins) into quartiles
+moneyball_training_data <- moneyball_training_data %>%
+  mutate(TARGET_WINS_BIN = ntile(TARGET_WINS, 4))
+```
+
+```{r}
+# Check the number of teams in each bin for TARGET_WINS (Number of wins)
+table(moneyball_training_data$TARGET_WINS_BIN)
+```
+
+In order to assess how efficiently a player turns their at-bat (which represents a batter's turn to hit, including results such as a hit, walk, strikeout, or foul ball) into home runs, we introduced a new variable called HR_efficiency. This variable measures the ratio of home runs to total base hits for batters, calculated by dividing the number of home runs by the total number of base hits. By interpreting this metric, the higher the value, the more efficient the player is at hitting home runs. HR_efficiency can be an important indicator of a player's power-hitting ability.
+
+```{r}
+moneyball_training_data$HR_Efficiency <- moneyball_training_data$TEAM_BATTING_HR / moneyball_training_data$TEAM_BATTING_H
+```
+
+### Section 3: BUILD MODELS
+
+Below are three different multiple linear regression models developed to predict the number of wins.
+
+#### Model 1: Full Model
+
+We start by including all key variables that are expected to influence wins.
+
+```{r model1, echo=TRUE}
+model1 <- lm(TARGET_WINS ~ TEAM_BATTING_H + TEAM_BATTING_2B + TEAM_BATTING_3B + TEAM_BATTING_HR + TEAM_BATTING_BB + TEAM_BATTING_HBP + TEAM_BATTING_SO + TEAM_BASERUN_SB + TEAM_BASERUN_CS + TEAM_FIELDING_E + TEAM_FIELDING_DP +
+TEAM_PITCHING_BB + TEAM_PITCHING_H + TEAM_PITCHING_HR + TEAM_PITCHING_SO, data = moneyball_training_data)
+summary(model1)
+```
+
+```{r}
+plot(model1)
+```
+
+### Key Points:
+
+- **Overall Fit:**  
+  - Adjusted R-squared is 0.311, indicating that about 31% of the variation in wins is explained by the model.  
+  - The overall model is statistically significant (F p < 2.2e-16).
+
+- **Significant Predictors:**  
+  - **Positive Effects:** TEAM_BATTING_H, TEAM_BATTING_3B, and TEAM_BASERUN_SB strongly predict higher wins.
+  - **Negative Effects:** TEAM_FIELDING_E and TEAM_FIELDING_DP are significant, suggesting that fewer errors and double plays boost wins. Additionally, TEAM_BATTING_SO negatively impacts wins, while TEAM_PITCHING_SO has a positive effect.
+
+### That means:
+- The model explains about 31% of the variation in wins.
+- More total hits, triples, and stolen bases are linked to more wins.
+- The coefficients mostly follow our expectations (e.g., a positive impact for home runs).
+- Fewer fielding errors and double plays are important for winning.
+- Batting strikeouts hurt the team, while more pitching strikeouts help.
+- Some variables (like doubles, home runs, hit-by-pitch, and caught stealing) are less important or not statistically significant.
+
+#### Model 2: Reduced Model
+
+Next, we simplify the model by removing variables that are not statistically significant or are redundant.
+
+```{r model2, echo=TRUE}
+model2 <- lm(TARGET_WINS ~ TEAM_BATTING_HR + TEAM_BASERUN_SB +
+              TEAM_FIELDING_E + TEAM_PITCHING_SO + TEAM_PITCHING_H,
+              data = moneyball_training_data)
+summary(model2)
+```
+
+```{r}
+plot(model2)
+```
+
+### Key Points:
+
+- **Overall Fit:**  
+  - Adjusted R-squared is 0.1039, meaning about 10.4% of the variation in wins is explained by the model.  
+  - The overall model is statistically significant (F p < 2.2e-16).
+
+- **Significant Predictors:**  
+  - **Positive Effects:** TEAM_BATTING_HR, TEAM_BASERUN_SB, and TEAM_PITCHING_H are significantly linked to higher wins.  
+  - **Negative Effects:** TEAM_FIELDING_E and TEAM_PITCHING_SO show significant negative effects on wins.
+
+### That means:
+- The reduced model explains about 10% of the variation in wins.
+- More home runs and stolen bases are associated with more wins.
+- Better fielding (fewer errors) is important for winning.
+- The effects of pitching variables (more hits allowed predict higher wins while more strikeouts predict lower wins) are significant.
+
+#### Model 3: Model with Transformations/Interactions
+
+Finally, we experiment with transformations and interactions. Here, we create a new variable, *HR_Efficiency* (the ratio of home runs to total hits), and apply a log transformation to reduce skewness in stolen bases. We also include an interaction between home runs and pitching strikeouts.
+
+```{r model3, echo=TRUE}
+model3 <- lm(TARGET_WINS ~ log(TEAM_BASERUN_SB + 1) + TEAM_FIELDING_E +
+              HR_Efficiency + TEAM_PITCHING_SO + TEAM_BATTING_HR * TEAM_PITCHING_SO,
+              data = moneyball_training_data)
+summary(model3)
+```
+
+```{r}
+plot(model3)
+```
+
+### Section 4: SELECT MODELS
+
+To select the best multiple linear regression model, we will use the Moneyball evaluation dataset to assess their performances. First, we will apply all the transformations we implemented on the training dataset, and then we will use the three models to make predictions.
+
+```{r}
+# Ensure the evaluation dataset has the same transformations as training data
+moneyball_evaluation_data <- moneyball_evaluation_data %>%
+  mutate(HR_Efficiency = ifelse(TEAM_BATTING_H == 0 | is.na(TEAM_BATTING_H), 0, TEAM_BATTING_HR / TEAM_BATTING_H),
+         log_TEAM_BASERUN_SB = log(ifelse(is.na(TEAM_BASERUN_SB), 0, TEAM_BASERUN_SB) + 1))
+
+# Predict using the three models
+pred_model1 <- predict(model1, newdata = moneyball_evaluation_data)
+pred_model2 <- predict(model2, newdata = moneyball_evaluation_data)
+pred_model3 <- predict(model3, newdata = moneyball_evaluation_data)
+```
+
+Since we cannot compare predictions to the actual number of wins for the teams in the evaluation data set, we can instead evaluate the spread of their distributions. If a model produces extreme values, it may not be a reliable model.
+
+```{r}
+boxplot(pred_model1, pred_model2, pred_model3, 
+        names = c("Model 1", "Model 2", "Model 3"),
+        main = "Comparison of Predictions", col = c("blue3", "red3", "green4"))
+```
+
+Both models 2 and 3 have many outliers, indicating they may not serve as good regression models. We can then compare the Adjusted R-squared values for all three models.
+
+```{r}
+  # Adjusted R-squared for all three models
+summary(model1)$adj.r.squared
+summary(model2)$adj.r.squared
+summary(model3)$adj.r.squared
+```
+
+A higher Adjusted R-squared value indicates a better fit for the model. In this case, model 1 has a significantly higher Adjusted R-squared value compared to the other two models. Additionally, we can compare the Akaike Information Criterion (AIC) and the Bayesian Information Criterion (BIC) for all three models.
+
+```{r}
+# Compare Akaike Information Criterion (AIC)
+AIC(model1, model2, model3)
+```
+
+```{r}
+# Compare Bayesian Information Criterion (BIC)
+BIC(model1, model2, model3)
+```
+
+Both the AIC and BIC suggest that Model 1 is the superior choice, as it has lower AIC and BIC values. This indicates a better balance between fit and complexity. Overall, Model 1 is the best multiple regression model among the three options.

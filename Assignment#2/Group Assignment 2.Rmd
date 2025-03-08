@@ -198,3 +198,110 @@ ROC <- function(x, y){
 
 ROC(data$class, data$scored.probability)
 ```
+**11. Use your created R functions and the provided classification output data set to produce all of the classification metrics discussed above.**
+
+```{r}
+# extracting values from confusion matrix
+TP <- conf_matrix[2, 2]
+TN <- conf_matrix[1, 1]
+FP <- conf_matrix[2, 1]
+FN <- conf_matrix[1, 2]
+
+# the already created functions:
+Accuracy <- function(TP, TN, FP, FN) {
+  (TP + TN) / (TP + TN + FP + FN)
+}
+
+ClassificationError <- function(TP, TN, FP, FN) {
+  (FP + FN) / (TP + TN + FP + FN)
+}
+
+Precision <- function(TP, FP) {
+  TP / (TP + FP)
+}
+
+Sensitivity <- function(TP, FN) {
+  TP / (TP + FN)
+}
+
+Specificity <- function(TN, FP) {
+  TN / (TN + FP)
+}
+
+F1_Score <- function(precision, sensitivity) {
+  (2 * precision * sensitivity) / (precision + sensitivity)
+}
+
+# metric calculations
+accuracy <- Accuracy(TP, TN, FP, FN)
+classification_error <- 1 - accuracy
+precision <- Precision(TP, FP)
+sensitivity <- Sensitivity(TP, FN)
+specificity <- Specificity(TN, FP)
+f1_score <- F1_Score(precision, sensitivity)
+
+list(
+  accuracy = Accuracy(TP, TN, FP, FN),
+  classification_error = 1 - Accuracy(TP, TN, FP, FN),
+  precision = precision <- Precision(TP, FP),
+  sensitivity = sensitivity <- Sensitivity(TP, FN),
+  specificity = specificity,
+  F1_score = F1_Score(precision, sensitivity)
+)
+```
+- Accuracy: 80.66% accuracy means the model correctly classifies 80.66% of observations.
+- Classification Error Rate: 19.34% of predictions are incorrect.
+- Precision: of 84.38% indicates the model correctly identifies positive cases 84.38% of the time.
+- Sensitivity (Recall): of 47.37% shows the model detects about half of the actual positive cases.
+- Specificity: of 95.97% indicates the model is highly accurate at identifying negative cases.
+- F1 score: of 60.67% suggests a moderate balance between precision and recall, with room for improvement.
+
+
+**12. Investigate the caret package. In particular, consider the functions confusionMatrix, sensitivity, and specificity. Apply the functions to the data set. How do the results compare with your own functions?**
+```{r}
+library(caret)
+
+# confusionMatrix using caret package
+confusionMatrix_caret <- confusionMatrix(as.factor(data$scored.class), as.factor(data$class), positive="1")
+print(confusionMatrix_caret)
+
+# sensitivity and specificity from caret
+caret_sensitivity <- sensitivity(as.factor(data$scored.class), as.factor(data$class), positive="1")
+caret_specificity <- specificity(as.factor(data$scored.class), as.factor(data$class), negative="0")
+
+# comparing with the manually calculated functions
+list(
+  Your_Sensitivity = sensitivity,
+  Caret_Sensitivity = caret_sensitivity,
+  Your_Specificity = specificity,
+  Caret_Specificity = caret_specificity <- specificity(as.factor(data$scored.class), as.factor(data$class), positive="1")
+)
+
+
+```
+- Accuracy: 80.66%; matches caret results, showing correct prediction rate.
+- Classification Error Rate: 19.34%; model misclassifies about 19.34% of the observations.
+- Precision (Positive Predictive Value): 84.38%; when predicting positive, the model is correct 84.38% of the time.
+- Sensitivity (Recall): Both custom and caret functions returned 47.37%; the model detects about half of actual positives.
+- Specificity: Both methods returned 95.97%; the model is highly accurate in identifying true negatives.
+- F1 Score: 60.67%; moderate balance between precision and recall indicates room for model improvement.
+
+
+**13. Investigate the pROC package. Use it to generate an ROC curve for the data set. How do the results compare with your own functions?**
+```{r}
+library(pROC)
+
+# ROC curve using pROC package
+roc_obj <- roc(response = data$class, predictor = data$scored.probability)
+
+# plot
+plot(roc_obj, main = "ROC Curve (pROC package)", col = "blue")
+auc_pROC <- auc(roc_obj)
+
+print(paste("AUC (pROC package):", auc_pROC))
+```
+
+**ROC Curve and AUC using pROC package:**
+
+- The pROC package calculated an AUC of 0.8503, indicating good predictive ability of the model.
+- The ROC curve generated matches closely with our manually computed ROC, confirming accuracy.

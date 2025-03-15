@@ -274,7 +274,7 @@ list(
   Your_Sensitivity = sensitivity,
   Caret_Sensitivity = caret_sensitivity,
   Your_Specificity = specificity,
-  Caret_Specificity = caret_specificity <- specificity(as.factor(data$scored.class), as.factor(data$class), positive="1")
+  Caret_Specificity = caret_specificity
 )
 
 

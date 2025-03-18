@@ -1,0 +1,84 @@
+---
+title: "Crimes"
+author: "Bedros, Haig; Dela Cruz, Sandra; Hugh, Tiffany; Li, Yanyi"
+date: "2025-03-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Install packages
+install.packages(c("dplyr", "ggplot2", "tidyr", "reshape2"))
+install.packages("pROC")
+library(dplyr); library(ggplot2); library(tidyr); library(reshape2);library(pROC)  
+```
+
+```{r setup1, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Import dataset
+library(readr)
+crime_training_data <- read_csv("crime-training-data_modified.csv")
+View(crime_training_data_modified)
+
+crime_evaluation<- read_csv("crime-evaluation-data_modified.csv")
+View(crime_evaluation_data_modified)
+```
+
+##Objective 
+For our third group assignment, we were provided with a dataset containing crime-related information for various neighborhoods in a major city. The dataset includes a binary response variable indicating whether a neighborhood’s crime rate is above the median (1) or below it (0). Our goal is to develop a binary logistic regression model using the training dataset to predict whether a given neighborhood is at risk for high crime levels. Through this analysis, we aim to identify key predictors of crime and assess the model's effectiveness in classification.
+
+The variables in this data compromise of: 
+• zn: proportion of residential land zoned for large lots (over 25000 square feet) (predictor variable)
+• indus: proportion of non-retail business acres per suburb (predictor variable)
+• chas: a dummy var. for whether the suburb borders the Charles River (1) or not (0) (predictor variable)
+• nox: nitrogen oxides concentration (parts per 10 million) (predictor variable)
+• rm: average number of rooms per dwelling (predictor variable)
+• age: proportion of owner-occupied units built prior to 1940 (predictor variable)
+• dis: weighted mean of distances to five Boston employment centers (predictor variable)
+• rad: index of accessibility to radial highways (predictor variable)
+• tax: full-value property-tax rate per $10,000 (predictor variable)
+• ptratio: pupil-teacher ratio by town (predictor variable)
+• lstat: lower status of the population (percent) (predictor variable)
+• medv: median value of owner-occupied homes in $1000s (predictor variable)
+• target: whether the crime rate is above the median crime rate (1) or not (0) (response variable) 
+
+
+##Data Exploration 
+
+```{r setup2, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+summary(crime_training_data)
+summary(crime_evaluation)
+```
+Preliminary summary statistics reveal that the crime training dataset consists of 466 observations with 12 predictor variables, while the crime evaluation dataset contains 40 observations with 13 variables, including the target variable. Our next step is to examine the distribution of the predictor variables to gain deeper insights into their characteristics and potential impact on the model.
+
+```{r setup3, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+
+# as numeric
+numeric_vars <- crime_training_data %>% select(where(is.numeric))
+# Create histograms
+num_plots <- lapply(names(numeric_vars), function(var) {
+  plot <- ggplot(crime_training_data, aes_string(x = var)) +
+    geom_histogram(bins = 30, fill = "purple", color = "black", alpha = 0.7) +
+    labs(title = paste("Histogram of", var), x = var, y = "Count") +
+    theme_minimal()
+  
+  print(plot)  
+})
+
+
+```
+
+
+The histograms reveal distinct distribution patterns among the variables, shedding light on their underlying characteristics. The zn variable, representing the proportion of land zoned for large lots, is heavily right-skewed, indicating that most suburbs have little to no large-lot zoning, with only a few having substantial allocations. The indus variable follows a moderately right-skewed distribution, suggesting that non-retail business acreage is relatively low in most suburbs but significantly higher in a few areas. The chas variable, being binary (0 or 1), is highly imbalanced, with most suburbs not bordering the Charles River. The nox variable, which measures air pollution, has a somewhat uniform but slightly skewed distribution, reflecting variability in nitrogen oxide concentrations across different areas.
+
+The rm variable, capturing the average number of rooms per dwelling, is approximately normal, implying that most homes have a standard number of rooms, with fewer extreme cases. The age variable is skewed toward higher values, highlighting that a significant proportion of owner-occupied units were built before 1940. The dis variable is right-skewed, meaning that while some suburbs are close to employment centers, many are farther away. The rad and tax variables exhibit a bimodal distribution, which makes sense given their categorical-like nature—certain suburbs have particularly high accessibility to highways or high property tax rates, while others do not.
+
+The ptratio variable is also right-skewed, showing that most suburbs have lower pupil-teacher ratios, with a few having significantly higher ones. The lstat variable, representing the percentage of lower-status population, has a broader spread, signifying substantial variation in socioeconomic conditions across suburbs. Finally, the medv variable, indicating the median home value, follows a near-normal distribution but with slight skewness, suggesting that while home values are mostly centered around a typical range, some suburbs have notably high property values. These distribution characteristics highlight potential areas for transformation or deeper statistical exploration.
+
+
+
+

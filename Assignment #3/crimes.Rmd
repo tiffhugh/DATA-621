@@ -5,23 +5,22 @@ date: "2025-03-18"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-# Install packages
-install.packages(c("dplyr", "ggplot2", "tidyr", "reshape2"))
-install.packages("pROC")
-library(dplyr); library(ggplot2); library(tidyr); library(reshape2);library(pROC)  
+```{r, include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(reshape2)
+library(pROC)
+library(readr)
 ```
 
-```{r setup1, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r, include=FALSE}
 # Import dataset
-library(readr)
-crime_training_data <- read_csv("crime-training-data_modified.csv")
-View(crime_training_data_modified)
+crime_training_data <- read_csv("https://github.com/tiffhugh/DATA-621/blob/main/Assignment%20%233/crime-training-data_modified.csv")
+View(crime_training_data)
 
-crime_evaluation<- read_csv("crime-evaluation-data_modified.csv")
-View(crime_evaluation_data_modified)
+crime_evaluation_data<- read_csv("https://github.com/tiffhugh/DATA-621/blob/main/Assignment%20%233/crime-evaluation-data_modified.csv")
+View(crime_evaluation_data)
 ```
 
 ##Objective 
@@ -45,10 +44,9 @@ The variables in this data compromise of:
 
 ##Data Exploration 
 
-```{r setup2, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r, include=True}
 summary(crime_training_data)
-summary(crime_evaluation)
+summary(crime_evaluation_data)
 ```
 Preliminary summary statistics reveal that the crime training dataset consists of 466 observations with 12 predictor variables, while the crime evaluation dataset contains 40 observations with 13 variables, including the target variable. Our next step is to examine the distribution of the predictor variables to gain deeper insights into their characteristics and potential impact on the model.
 

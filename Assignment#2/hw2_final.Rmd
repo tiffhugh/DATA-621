@@ -1,0 +1,310 @@
+---
+title: "HW2"
+author: "Bedros, Haig; Dela Cruz, Sandra; Hugh, Tiffany; Li, Yanyi"
+date: "`r Sys.Date()`"
+format: pdf
+---
+<style type="text/css">
+
+h1.title {
+  font-size: 26px;
+  color: Black;
+  text-align: center;
+}
+h4.author { 
+  font-size: 18px;
+  color: Black;
+  text-align: center;
+}
+h4.date {
+  font-size: 12px;
+  color: Black;
+  text-align: center;
+}
+</style>
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(tidy.opts = list(width.cutoff = 50), tidy = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(caret)
+library(pROC)
+```
+
+```{=html}
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[','\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+});
+</script>
+```
+
+```{=html}
+<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+```
+
+### DATA EXPLORATION
+
+```{r}
+# Import data
+data <- read.csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/classification-output-data.csv")
+glimpse(data)
+```
+
+```{r}
+# Creating Confusion Matrix Using table() Function
+conf_matrix <- table(Predicted = data$scored.class, Actual = data$class)
+print(conf_matrix)
+```
+
+**2. Do the rows represent the actual or predicted class? The columns?**
+
+In the confusion matrix, the columns labeled "Actual" represent the true labels from the dataset, while the rows labeled "Predicted" indicate the model's predictions. This means that the model correctly predicted 119 true negatives, 27 true positives, made 5 false positive predictions, and had 30 false negative predictions.
+
+### Manually Creating Functions
+
+```{r}
+# Extracting values from the confusion matrix
+  TP <- conf_matrix[2,2]  # True Positives
+  TN <- conf_matrix[1,1]  # True Negatives
+  FP <- conf_matrix[2,1]  # False Positives
+  FN <- conf_matrix[1,2]  # False Negatives
+```
+
+**3. The function for Accuracy of the model:**
+
+```{r}
+accuracy = (TP+TN) / (TP+FP+TN+FN)
+print(accuracy)
+```
+
+80.66% accuracy means the model is correct about 80.7% of the time.
+
+**4. The function for Classification Error Rate of the model:**
+
+```{r}
+class_error_rate = (FP+FN) / (TP+FP+TN+FN)
+print(class_error_rate)
+```
+
+19.34% classification error rate means the model misclassifies about 19.34% of the cases.
+
+**5. The function for Precision of the model:**
+
+```{r}
+precision = (TP) / (TP+FP)
+print(precision)
+```
+
+84.38% precision means that when the model predicts positive, it is correct 84.38% of the time.
+
+**6. The function for Sensitivity of the model:**
+
+```{r}
+sensitivity = (TP) / (TP+FN)
+print(sensitivity)
+```
+
+47.37% sensitivity means the model is identifying about 47.37% of actual positives.
+
+**7. The function for Specificity of the model:**
+
+```{r}
+specificity = (TN) / (TN+FP)
+print(specificity)
+```
+
+96% specificity means the model is very good at correctly identifying negatives.
+
+**8. The function for F1 score of the model:**
+
+```{r}
+f1_score = (2*precision*sensitivity) / (precision+sensitivity)
+print(f1_score)
+```
+
+60.7% means the model has a moderate balance between precision and sensitivity.
+
+**9. Before we move on, let’s consider a question that was asked: What are the bounds on the F1 score? Show that the F1 score will always be between 0 and 1. (Hint: If 0 \< 𝑎 \< 1 and 0 \< 𝑏 \< 1 then 𝑎𝑏 \< 𝑎.)**
+
+The F1 Score is a measure of a test's accuracy, specifically a balance between precision and sensitivity. **Precision** is the ratio of true positives (TP) to the total number of predicted positives (TP + FP), and **sensitivity** is the ratio of true positives (TP) to the total number of actual positives (TP +FN).
+
+Let's see why F1 score will always be between 0 and 1:
+
+-   **Bounds on Precision and Recall:** Precision and sensitivity are both ratios, which means their values must alwasys be between 0 and 1. Therefore:
+
+    -   0 ≤ Precision ≤ 1
+    -   0 ≤ Recall ≤1
+
+-   **Upper Bound (F1 ≤ 1)**: The maximum possible value for the F1 score occurs when both precision and sensitivity are equal to 1. In that case, the F1 score reaches its upper bound of 1. To illustrate: $$
+    F_1 = \frac{2 \cdot Precision \cdot Sensitivity}{Precision + Sensitivity}
+    $$ If both precision and recall are equal to 1, we get: $$
+    F_1 = \frac{2 \cdot 1 \cdot 1}{1 + 1} = \frac{2}{2} = 1 
+    $$ Thus, F1 = 1 is the upper bound.
+
+-   **Lower Bound (F1 ≥ 0)**: If either precision and sensitivity is 0, the F1 score will be 0.
+
+$$
+F_1 = \frac{2 \cdot 0 \cdot 1}{0 + 1} = 0
+$$ or $$
+F_1 = \frac{2 \cdot 1 \cdot 0}{1 + 0} = 0
+$$ Hence, **F1 = 0** is the lower bound.
+
+Therefore, the F1 score is always between 0 and 1,
+
+$$
+0 ≤ F_1 ≤ 1
+$$
+
+**10. A function that generates ROC curve from a data set with a true classification column (class in our example) and a probability column (scored.probability in our example).**
+
+```{r}
+ROC <- function(x, y){
+  # order x by y in descending order
+  x <- x [order(y, decreasing = TRUE)]
+  
+  # calculate TP and FP rates
+  TP <- cumsum(x) / sum(x)
+  FP <- cumsum(!x) / sum(!x)
+  
+  # Prepare data for AUC calculation
+  df <- data.frame(TP, FP, x)
+  TP_df <- c(diff(df$TP), 0)
+  FP_df <- c(diff(df$FP), 0)
+  
+  #calculate AUC rounded to 4 decimal places
+  AUC <- round(sum(df$TP * FP_df) + sum(TP_df * FP_df)/ 2, 4)
+  
+  # Plot ROC curve
+  plot(df$FP, df$TP, type = "l",
+       col = "red",
+       main = "ROC Curve",
+       xlab = "False Positive Rate",
+       ylab = "True Positive Rate")
+  
+  # add diagonal line
+  abline(a = 0, b = 1, col = "grey", lty = 2)
+  
+  # add AUC legend
+  legend("bottomright", legend = paste("AUC = ", AUC), title = "AUC")
+}
+
+ROC(data$class, data$scored.probability)
+```
+**11. Use your created R functions and the provided classification output data set to produce all of the classification metrics discussed above.**
+
+```{r}
+# extracting values from confusion matrix
+TP <- conf_matrix[2, 2]
+TN <- conf_matrix[1, 1]
+FP <- conf_matrix[2, 1]
+FN <- conf_matrix[1, 2]
+
+# the already created functions:
+Accuracy <- function(TP, TN, FP, FN) {
+  (TP + TN) / (TP + TN + FP + FN)
+}
+
+ClassificationError <- function(TP, TN, FP, FN) {
+  (FP + FN) / (TP + TN + FP + FN)
+}
+
+Precision <- function(TP, FP) {
+  TP / (TP + FP)
+}
+
+Sensitivity <- function(TP, FN) {
+  TP / (TP + FN)
+}
+
+Specificity <- function(TN, FP) {
+  TN / (TN + FP)
+}
+
+F1_Score <- function(precision, sensitivity) {
+  (2 * precision * sensitivity) / (precision + sensitivity)
+}
+
+# metric calculations
+accuracy <- Accuracy(TP, TN, FP, FN)
+classification_error <- 1 - accuracy
+precision <- Precision(TP, FP)
+sensitivity <- Sensitivity(TP, FN)
+specificity <- Specificity(TN, FP)
+f1_score <- F1_Score(precision, sensitivity)
+
+list(
+  accuracy = Accuracy(TP, TN, FP, FN),
+  classification_error = 1 - Accuracy(TP, TN, FP, FN),
+  precision = precision <- Precision(TP, FP),
+  sensitivity = sensitivity <- Sensitivity(TP, FN),
+  specificity = specificity,
+  F1_score = F1_Score(precision, sensitivity)
+)
+```
+- Accuracy: 80.66% accuracy means the model correctly classifies 80.66% of observations.
+- Classification Error Rate: 19.34% of predictions are incorrect.
+- Precision: of 84.38% indicates the model correctly identifies positive cases 84.38% of the time.
+- Sensitivity (Recall): of 47.37% shows the model detects about half of the actual positive cases.
+- Specificity: of 95.97% indicates the model is highly accurate at identifying negative cases.
+- F1 score: of 60.67% suggests a moderate balance between precision and recall, with room for improvement.
+
+
+**12. Investigate the caret package. In particular, consider the functions confusionMatrix, sensitivity, and specificity. Apply the functions to the data set. How do the results compare with your own functions?**
+```{r}
+library(caret)
+
+# confusionMatrix using caret package
+confusionMatrix_caret <- confusionMatrix(as.factor(data$scored.class), as.factor(data$class), positive="1")
+print(confusionMatrix_caret)
+
+# sensitivity and specificity from caret
+caret_sensitivity <- sensitivity(as.factor(data$scored.class), as.factor(data$class), positive="1")
+caret_specificity <- specificity(as.factor(data$scored.class), as.factor(data$class), negative="0")
+
+# comparing with the manually calculated functions
+list(
+  Your_Sensitivity = sensitivity,
+  Caret_Sensitivity = caret_sensitivity,
+  Your_Specificity = specificity,
+  Caret_Specificity = caret_specificity
+)
+
+
+```
+- Accuracy: 80.66%; matches caret results, showing correct prediction rate.
+- Classification Error Rate: 19.34%; model misclassifies about 19.34% of the observations.
+- Precision (Positive Predictive Value): 84.38%; when predicting positive, the model is correct 84.38% of the time.
+- Sensitivity (Recall): Both custom and caret functions returned 47.37%; the model detects about half of actual positives.
+- Specificity: Both methods returned 95.97%; the model is highly accurate in identifying true negatives.
+- F1 Score: 60.67%; moderate balance between precision and recall indicates room for model improvement.
+
+
+**13. Investigate the pROC package. Use it to generate an ROC curve for the data set. How do the results compare with your own functions?**
+```{r}
+library(pROC)
+
+# ROC curve using pROC package
+roc_obj <- roc(response = data$class, predictor = data$scored.probability)
+
+# plot
+plot(roc_obj, main = "ROC Curve (pROC package)", col = "blue")
+auc_pROC <- auc(roc_obj)
+
+print(paste("AUC (pROC package):", auc_pROC))
+```
+
+**ROC Curve and AUC using pROC package:**
+
+- The pROC package calculated an AUC of 0.8503, indicating good predictive ability of the model.
+- The ROC curve generated matches closely with our manually computed ROC, confirming accuracy.

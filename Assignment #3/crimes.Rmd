@@ -83,7 +83,7 @@ The ptratio variable is also right-skewed, showing that most suburbs have lower 
 plot_missing(crime_training_data)
 ```
 
-As we can see in the graph above there is no missing data with our any
+As we can see in the graph above that there is no missing data with our any
 of our predictor variables.
 
 ### Outliers

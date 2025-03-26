@@ -3,6 +3,9 @@ title: "Crimes"
 author: "Bedros, Haig; Dela Cruz, Sandra; Hugh, Tiffany; Li, Yanyi"
 date: "2025-03-18"
 output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
 ---
 
 ```{r, include=FALSE}
@@ -10,6 +13,7 @@ library(dplyr)
 library(ggplot2)
 library(tidyr)
 library(DataExplorer)
+library(correlationfunnel)
 library(reshape2)
 library(pROC)
 library(readr)
@@ -24,7 +28,7 @@ crime_evaluation_data<- read_csv("https://github.com/tiffhugh/DATA-621/blob/main
 View(crime_evaluation_data)
 ```
 
-##Objective 
+### Objective 
 For our third group assignment, we were provided with a dataset containing crime-related information for various neighborhoods in a major city. The dataset includes a binary response variable indicating whether a neighborhood’s crime rate is above the median (1) or below it (0). Our goal is to develop a binary logistic regression model using the training dataset to predict whether a given neighborhood is at risk for high crime levels. Through this analysis, we aim to identify key predictors of crime and assess the model's effectiveness in classification.
 
 The variables in this data compromise of: 
@@ -43,28 +47,82 @@ The variables in this data compromise of:
 • target: whether the crime rate is above the median crime rate (1) or not (0) (response variable) 
 
 
-##Data Exploration 
+# **Data Exploration** 
 
-```{r, include=True}
+```{r, echo=FALSE}
+cat("Summary of training data: \n")
 summary(crime_training_data)
+
+cat("Summary of evaluation data: \n")
 summary(crime_evaluation_data)
 ```
+
 Preliminary summary statistics reveal that the crime training dataset consists of 466 observations with 12 predictor variables, while the crime evaluation dataset contains 40 observations with 13 variables, including the target variable. Our next step is to examine the distribution of the predictor variables to gain deeper insights into their characteristics and potential impact on the model.
+
+### Histogram of Predictor Variables
 ```{r echo=FALSE}
 #| fig-height: 5
 #| fig-width: 10
-# remove index variable in our dataset
-crime_training_data = crime_training_data[,-13]
-
 # let's plot a histogram using DataExplorer library
 plot_histogram(crime_training_data)
 ```
+
 The histograms reveal distinct distribution patterns among the variables, shedding light on their underlying characteristics. The zn variable, representing the proportion of land zoned for large lots, is heavily right-skewed, indicating that most suburbs have little to no large-lot zoning, with only a few having substantial allocations. The indus variable follows a moderately right-skewed distribution, suggesting that non-retail business acreage is relatively low in most suburbs but significantly higher in a few areas. The chas variable, being binary (0 or 1), is highly imbalanced, with most suburbs not bordering the Charles River. The nox variable, which measures air pollution, has a somewhat uniform but slightly skewed distribution, reflecting variability in nitrogen oxide concentrations across different areas.
 
 The rm variable, capturing the average number of rooms per dwelling, is approximately normal, implying that most homes have a standard number of rooms, with fewer extreme cases. The age variable is skewed toward higher values, highlighting that a significant proportion of owner-occupied units were built before 1940. The dis variable is right-skewed, meaning that while some suburbs are close to employment centers, many are farther away. The rad and tax variables exhibit a bimodal distribution, which makes sense given their categorical-like nature—certain suburbs have particularly high accessibility to highways or high property tax rates, while others do not.
 
 The ptratio variable is also right-skewed, showing that most suburbs have lower pupil-teacher ratios, with a few having significantly higher ones. The lstat variable, representing the percentage of lower-status population, has a broader spread, signifying substantial variation in socioeconomic conditions across suburbs. Finally, the medv variable, indicating the median home value, follows a near-normal distribution but with slight skewness, suggesting that while home values are mostly centered around a typical range, some suburbs have notably high property values. These distribution characteristics highlight potential areas for transformation or deeper statistical exploration.
 
+# **Data Preparation**
 
+### Missing Data
 
+```{r, echo=FALSE}
+#| fig-height: 3
+#| fig-width: 8
+plot_missing(crime_training_data)
+```
 
+As we can see in the graph above there is no missing data with our any
+of our predictor variables.
+
+### Outliers
+
+```{r, echo=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+plot_boxplot(crime_training_data, by='target')
+```
+The boxplot above separates the data by the 'target' variable, showing the distribution of crime rates for the two target groups (0 and 1). The median line inside each box indicates the central value of the crime rate for each group. From the boxplot, we can observe that the distributions of crime rates for both target = 0 (box below) and target = 1 (box above) are quite widely spread. This suggests that there is significant variability in the crime rate for both groups, with several outliers beyond the whiskers. Given the broad distribution in both groups, we choose to retain the outliers in our analysis, as they may represent important extreme events, such as rare high-crime instances. 
+
+### Combine Variables
+
+Older homes might be located in neighborhoods with lower home values, and this combination could provide insight into areas that may be socioeconomically distressed and more prone to higher crime rates. Therefore, we'll introduce a new variable called "housing_age_value_ratio." This variable measures the ratio of the proportion of owner-occupied units built prior to 1940 (age) divided by the median value of owner-occupied homes in thousands of dollars (medv).
+
+```{r, echo=FALSE}
+crime_training_data$housing_age_value_ratio <- 
+  crime_training_data$age / crime_training_data$medv
+head(crime_training_data[, c("age", "medv", "housing_age_value_ratio")])
+```
+
+### Correlation Funnel
+```{r, echo=FALSE}
+# Step 1: Convert to Binary Format
+crime_training_data_binarized_tbl <- crime_training_data %>% 
+  binarize(n_bins = 4, thresh_infreq = 0.01)
+
+# Step 2: Perform Correlation Analysis
+crime_training_data_correlated_tbl <- crime_training_data_binarized_tbl %>% 
+  correlate(target = target__1)
+
+head(crime_training_data_correlated_tbl)
+```
+
+```{r, echo=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+# Step 3: Visualize the Correlation Funnel
+crime_training_data_correlated_tbl %>%
+    plot_correlation_funnel(interactive = FALSE)
+```
+By using the correlation funnel above, we can guide our decision on which variables to choose when building our model. Our target variable for this funnel is target = 1, which indicates that the crime rate is above the median crime rate. The variables at the top of the funnel have the highest correlation with the target, and as we move down the funnel, the correlation becomes weaker.

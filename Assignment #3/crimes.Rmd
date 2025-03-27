@@ -13,7 +13,7 @@ library(dplyr)
 library(ggplot2)
 library(tidyr)
 library(DataExplorer)
-library(correlationfunnel)
+#library(correlationfunnel)
 library(reshape2)
 library(pROC)
 library(readr)
@@ -21,10 +21,10 @@ library(readr)
 
 ```{r, include=FALSE}
 # Import dataset
-crime_training_data <- read_csv("https://github.com/tiffhugh/DATA-621/blob/main/Assignment%20%233/crime-training-data_modified.csv")
+crime_training_data <- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/Assignment%20%233/crime-training-data_modified.csv")
 View(crime_training_data)
 
-crime_evaluation_data<- read_csv("https://github.com/tiffhugh/DATA-621/blob/main/Assignment%20%233/crime-evaluation-data_modified.csv")
+crime_evaluation_data<- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/Assignment%20%233/crime-evaluation-data_modified.csv")
 View(crime_evaluation_data)
 ```
 
@@ -33,17 +33,29 @@ For our third group assignment, we were provided with a dataset containing crime
 
 The variables in this data compromise of: 
 • zn: proportion of residential land zoned for large lots (over 25000 square feet) (predictor variable)
+
 • indus: proportion of non-retail business acres per suburb (predictor variable)
+
 • chas: a dummy var. for whether the suburb borders the Charles River (1) or not (0) (predictor variable)
+
 • nox: nitrogen oxides concentration (parts per 10 million) (predictor variable)
+
 • rm: average number of rooms per dwelling (predictor variable)
+
 • age: proportion of owner-occupied units built prior to 1940 (predictor variable)
+
 • dis: weighted mean of distances to five Boston employment centers (predictor variable)
+
 • rad: index of accessibility to radial highways (predictor variable)
+
 • tax: full-value property-tax rate per $10,000 (predictor variable)
+
 • ptratio: pupil-teacher ratio by town (predictor variable)
+
 • lstat: lower status of the population (percent) (predictor variable)
+
 • medv: median value of owner-occupied homes in $1000s (predictor variable)
+
 • target: whether the crime rate is above the median crime rate (1) or not (0) (response variable) 
 
 
@@ -123,6 +135,45 @@ head(crime_training_data_correlated_tbl)
 #| fig-width: 10
 # Step 3: Visualize the Correlation Funnel
 crime_training_data_correlated_tbl %>%
-    plot_correlation_funnel(interactive = FALSE)
+   plot_correlation_funnel(interactive = FALSE)
 ```
 By using the correlation funnel above, we can guide our decision on which variables to choose when building our model. Our target variable for this funnel is target = 1, which indicates that the crime rate is above the median crime rate. The variables at the top of the funnel have the highest correlation with the target, and as we move down the funnel, the correlation becomes weaker.
+
+# **Build Models**
+
+### Model #1 : General Linear Models
+
+
+```{r, echo=TRUE}
+# build glm
+logit_model_1 <- glm(target ~ ., 
+                     data = crime_training_data, 
+                     family = binomial)
+
+# summarize the model
+summary(logit_model_1)
+```
+
+The first model selected a general linear model to observe the relationships between all the predictors and the target variable. The significant predictors include nox, dis, rad, tax, ptratio, and medv:
+
+• Nitrogen oxides concentration: The coefficient is 49.34, the largest positive coefficient, indicating that higher levels of nitrogen oxides are strongly associated with higher crime rates. This is statistically significant with a p-value of 4.61e-10, making it a strong predictor. This result is intuitive, as areas with higher pollution levels could indicate lower socioeconomic conditions, which may correlate with higher crime rates.
+
+• Distance to employment centers: The coefficient is 0.73, suggesting that a higher distance to employment centers increases the odds of a neighborhood having a high crime rate. With a p-value of 0.00160, this relationship is statistically significant.
+
+• Accessibility to radial highways: The coefficient is 0.71, meaning that higher accessibility to radial highways increases the likelihood of a high crime rate. This is statistically significant with a p-value of 3.64e-05. While it's not entirely surprising that better highway access could correlate with higher crime (since highways can facilitate criminal activity), it’s still a bit counterintuitive because areas with better infrastructure might also be expected to have more resources that could reduce crime.
+
+• Property tax rate: The coefficient is -0.0073, indicating that a higher property tax rate slightly decreases the odds of a neighborhood having a high crime rate. This is statistically significant with a p-value of 0.02249. This is counterintuitive because one might expect higher property taxes to correlate with higher crime in economically disadvantaged areas. However, it could be related to gentrification, where rising property taxes are often associated with neighborhood revitalization, improved infrastructure, and a decrease in crime.
+
+• Pupil-teacher ratio: The coefficient is 0.39, suggesting that a higher pupil-teacher ratio increases the odds of a neighborhood having a high crime rate. With a p-value of 0.00186, this relationship is statistically significant.
+
+• (Median value of owner-occupied homes: The coefficient is 0.21, suggesting that higher home values are associated with higher crime rates. This is statistically significant with a p-value of 0.00475.
+
+Other predictors, such as zn, indus, chas, rm, age, lstat, and housing_age_value_ratio, are not significant predictors:
+
+• Housing_age_value_ratio: The coefficient is 0.27, indicating a slight positive association with high crime rates, but the p-value of 0.28631 suggests it is not statistically significant.
+
+• Dummy for bordering the Charles River: The coefficient is 0.95, indicating that neighborhoods bordering the Charles River have higher odds of having a high crime rate. However, the p-value of 0.21422 suggests this relationship is not statistically significant.
+
+• Proportion of non-retail business acres: The coefficient is -0.06, meaning that a one-unit increase in the proportion of non-retail business acres decreases the log-odds of a high crime rate by approximately 0.063. The p-value of 0.18764 indicates that this predictor is not statistically significant and might not be useful in predicting crime rates.
+
+This analysis suggests that while some predictors significantly influence crime rates, others do not show strong associations, and their inclusion in the model could be reconsidered. A transformation can be done to see how more align predictors are to the target. 

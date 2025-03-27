@@ -13,10 +13,12 @@ library(dplyr)
 library(ggplot2)
 library(tidyr)
 library(DataExplorer)
-#library(correlationfunnel)
+library(correlationfunnel)
 library(reshape2)
 library(pROC)
 library(readr)
+library(caret)
+library(DHARMa)
 ```
 
 ```{r, include=FALSE}
@@ -177,3 +179,77 @@ Other predictors, such as zn, indus, chas, rm, age, lstat, and housing_age_value
 • Proportion of non-retail business acres: The coefficient is -0.06, meaning that a one-unit increase in the proportion of non-retail business acres decreases the log-odds of a high crime rate by approximately 0.063. The p-value of 0.18764 indicates that this predictor is not statistically significant and might not be useful in predicting crime rates.
 
 This analysis suggests that while some predictors significantly influence crime rates, others do not show strong associations, and their inclusion in the model could be reconsidered. A transformation can be done to see how more align predictors are to the target. 
+
+### Model 2 (Manually Selected Variables)
+For Model 2, we manually select the predictor variables based on general considerations. We include ‘nox,’ which represents the nitrogen oxides concentration (in parts per 10 million), due to previous studies suggesting that high levels of air pollutants may correlate with increased crime rates. We also include ‘rad,’ the index of accessibility to radial highways, on the assumption that easier access to highways might facilitate the escape of individuals from crime scenes. The variable ‘tax,’ which represents the full-value property tax rate per $10,000, is included to examine whether neighborhoods with higher property tax rates might experience lower crime rates. Additionally, we include ‘ptratio,’ the pupil-teacher ratio by town, and ‘rm,’ the average number of rooms per dwelling, to explore potential relationships with crime rates, as studies suggest that individuals with lower-quality education may be more likely to engage in criminal activities later in life.
+
+```{r, echo=FALSE}
+library(DHARMa)
+
+# Model 2, choosing the predictive variables manually
+model2 <- glm(target ~ nox + rad + tax + ptratio + rm, 
+              data = crime_training_data, family = "binomial")
+summary(model2)
+
+# plot residual vs. predicted plot
+sr2 <- simulateResiduals(model2)
+plot(sr2)
+
+# get the log likelihood for comparison with other models
+ll_model2 <- logLik(model2)
+ll_model2
+```
+
+# **Select Models**
+### Model 2 (Confusion Matrix, ROC curve, and AUC value)
+```{r, echo=FALSE}
+library(caret)
+# Predict probabilities on the training data
+prediction_prob_train <- predict(model2, crime_training_data, type="response")
+
+# Predict classes (binary classification using a threshold of 0.5)
+threshold <- 0.5
+prediction_class_train <- ifelse(prediction_prob_train > threshold, 1, 0)
+
+# Calculate performance metrics on the training dataset
+# Confusion Matrix
+conf_matrix_train <- confusionMatrix(as.factor(prediction_class_train), 
+                                     as.factor(crime_training_data$target))
+print(conf_matrix_train)
+
+# Accuracy
+accuracy <- sum(prediction_class_train == crime_training_data$target) / 
+  length(crime_training_data$target)
+cat("Accuracy: ", accuracy, "\n")
+
+# Classification Error Rate
+classification_error_rate <- 1 - accuracy
+cat("Classification Error Rate: ", classification_error_rate, "\n")
+
+# Precision
+precision <- conf_matrix_train$byClass["Pos Pred Value"]
+cat("Precision: ", precision, "\n")
+
+# Sensitivity (Recall or True Positive Rate)
+sensitivity <- conf_matrix_train$byClass["Sensitivity"]
+cat("Sensitivity: ", sensitivity, "\n")
+
+# Specificity (True Negative Rate)
+specificity <- conf_matrix_train$byClass["Specificity"]
+cat("Specificity: ", specificity, "\n")
+
+# F1 Score
+f1_score <- 2 * (precision * sensitivity) / (precision + sensitivity)
+cat("F1 Score: ", f1_score, "\n")
+
+# AUC (Area Under the Curve)
+roc_curve <- roc(crime_training_data$target, prediction_prob_train)
+auc_value <- auc(roc_curve)
+cat("AUC: ", auc_value, "\n")
+
+# Plot ROC curve with AUC in the title
+plot(roc_curve, main = paste("ROC Curve Model 2 - AUC:", 
+                             round(auc(roc_curve), 2)), col = "red")
+
+```
+

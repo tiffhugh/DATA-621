@@ -252,4 +252,15 @@ plot(roc_curve, main = paste("ROC Curve Model 2 - AUC:",
                              round(auc(roc_curve), 2)), col = "red")
 
 ```
+# **Predictions Using Evaluation Data Set**
+### Model 2
+```{r}
+# Make predictions on the evaluation dataset
+prediction_prob_eval_model2 <- predict(model2, 
+                                       crime_evaluation_data, type="response")
 
+# Predict classes using the same threshold of 0.5
+prediction_class_eval_model2 <- ifelse(prediction_prob_eval_model2 > 
+                                         threshold, 1, 0)
+print(prediction_class_eval_model2)
+```

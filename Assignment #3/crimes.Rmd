@@ -341,3 +341,84 @@ prediction_class_eval_model2 <- ifelse(prediction_prob_eval_model2 >
                                          threshold, 1, 0)
 print(prediction_class_eval_model2)
 ```
+
+### Model 3 (Manually Selected Other Variables)
+For Model 3, we manually select predictor variables based on relevant considerations. We include 'indus,' which indicates the proportion of non-retail business acres per suburb. A higher proportion may suggest increased urban density, potentially linked to crime rates. We also use 'nox,' measuring nitrogen oxides concentration (in parts per 10 million), since areas with higher pollution levels often have lower-income populations due to industrial activity, heavy traffic, or poor urban planning. The variable 'rm,' representing the average number of rooms per dwelling, may indicate affluence and its relationship to crime. Additionally, 'rad' assesses highway accessibility, which may facilitate crime due to ease of movement. Finally, we include 'lstat,' a measure of socioeconomic status that is often associated with crime trends.
+
+```{r, echo=FALSE}
+# Model 3, choosing new predictive variables manually
+model3 <- glm(target ~ indus + nox + rm + rad + lstat, data = crime_training_data, family = "binomial")
+summary(model3)
+
+# plot residual vs. predicted plot
+sr3 <- simulateResiduals(model3)
+plot(sr3)
+
+# get the log likelihood for comparison with other models
+ll_model3 <- logLik(model3)
+ll_model3
+```
+
+# **Select Models**
+### Model 3 (Confusion Matrix, ROC curve, and AUC value)
+```{r, echo=FALSE}
+# Predict probabilities on the training data
+prediction_prob_train3 <- predict(model3, crime_training_data, type="response")
+
+# Predict classes (binary classification using a threshold of 0.5)
+prediction_class_train3 <- ifelse(prediction_prob_train3 > threshold, 1, 0)
+
+# Calculate performance metrics on the training dataset
+# Confusion Matrix
+conf_matrix_train3 <- confusionMatrix(as.factor(prediction_class_train3), 
+                                     as.factor(crime_training_data$target))
+print(conf_matrix_train3)
+
+# Accuracy
+accuracy3 <- sum(prediction_class_train3 == crime_training_data$target) / 
+  length(crime_training_data$target)
+cat("Accuracy: ", accuracy3, "\n")
+
+# Classification Error Rate
+classification_error_rate3 <- 1 - accuracy3
+cat("Classification Error Rate: ", classification_error_rate3, "\n")
+
+# Precision
+precision3 <- conf_matrix_train3$byClass["Pos Pred Value"]
+cat("Precision: ", precision3, "\n")
+
+# Sensitivity (Recall or True Positive Rate)
+sensitivity3 <- conf_matrix_train3$byClass["Sensitivity"]
+cat("Sensitivity: ", sensitivity3, "\n")
+
+# Specificity (True Negative Rate)
+specificity3 <- conf_matrix_train3$byClass["Specificity"]
+cat("Specificity: ", specificity3, "\n")
+
+# F1 Score
+f1_score3 <- 2 * (precision3 * sensitivity3) / (precision3 + sensitivity3)
+cat("F1 Score: ", f1_score3, "\n")
+
+# AUC (Area Under the Curve)
+roc_curve3 <- roc(crime_training_data$target, prediction_prob_train3)
+auc_value3 <- auc(roc_curve3)
+cat("AUC: ", auc_value3, "\n")
+
+# Plot ROC curve with AUC in the title
+plot(roc_curve3, main = paste("ROC Curve Model 2 - AUC:", 
+                             round(auc(roc_curve3), 2)), col = "green4")
+
+```
+
+# **Predictions Using Evaluation Data Set**
+### Model 3
+```{r}
+# Make predictions on the evaluation dataset
+prediction_prob_eval_model3 <- predict(model3, 
+                                       crime_evaluation_data, type="response")
+
+# Predict classes using the same threshold of 0.5
+prediction_class_eval_model3 <- ifelse(prediction_prob_eval_model3 > 
+                                         threshold, 1, 0)
+print(prediction_class_eval_model3)
+```

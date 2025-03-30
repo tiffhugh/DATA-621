@@ -9,6 +9,9 @@ editor_options:
 ---
 
 ```{r, include=FALSE}
+#install.packages("correlationfunnel")
+#install.packages("caret")
+#install.packages("DHARMa")
 library(dplyr)
 library(ggplot2)
 library(tidyr)
@@ -18,7 +21,7 @@ library(reshape2)
 library(pROC)
 library(readr)
 library(caret)
-library(DHARMa)
+#library(DHARMa)
 ```
 
 ```{r, include=FALSE}
@@ -156,7 +159,9 @@ logit_model_1 <- glm(target ~ .,
 summary(logit_model_1)
 ```
 
-The first model selected a general linear model to observe the relationships between all the predictors and the target variable. The significant predictors include nox, dis, rad, tax, ptratio, and medv:
+The first model selected a general linear model to observe the relationships between all the predictors and the target variable. GLM is straightforward and interpretable baseline for predicting whether a neighborhood has a high crime rate. By including all predictor variables initially, we can identify which factors are statistically significant before refining the model. This helps ensure we don’t prematurely exclude important variables and allows us to justify any removals based on evidence rather than assumptions.
+
+The significant predictors include nox, dis, rad, tax, ptratio, and medv:
 
 • Nitrogen oxides concentration: The coefficient is 49.34, the largest positive coefficient, indicating that higher levels of nitrogen oxides are strongly associated with higher crime rates. This is statistically significant with a p-value of 4.61e-10, making it a strong predictor. This result is intuitive, as areas with higher pollution levels could indicate lower socioeconomic conditions, which may correlate with higher crime rates.
 
@@ -179,6 +184,78 @@ Other predictors, such as zn, indus, chas, rm, age, lstat, and housing_age_value
 • Proportion of non-retail business acres: The coefficient is -0.06, meaning that a one-unit increase in the proportion of non-retail business acres decreases the log-odds of a high crime rate by approximately 0.063. The p-value of 0.18764 indicates that this predictor is not statistically significant and might not be useful in predicting crime rates.
 
 This analysis suggests that while some predictors significantly influence crime rates, others do not show strong associations, and their inclusion in the model could be reconsidered. A transformation can be done to see how more align predictors are to the target. 
+
+Now that we've run a GLM, the next step is to evaluate how well this model predicts crime. We'll start by running a residual diagnostic to assess model fit.
+```{r, echo=TRUE}
+library(DHARMa)
+# plot residual vs. predicted plot
+sr1 <- simulateResiduals(logit_model_1)
+plot(sr1)
+```
+
+The residual diagnostics indicates that the binary logistic regression model fits the data well. The QQ plot shows that residuals closely follow the expected uniform distribution, with no significant deviations detected by the KS, dispersion, or outlier tests (all p-values > 0.05). Additionally, the residuals versus predicted values plot exhibits no systematic patterns, suggesting that model assumptions are adequately met. Overall, the model appears to be appropriate for predicting high crime rates based on the given predictors.
+
+```{r, echo=FALSE}
+# get the log likelihood for comparison with other models
+ll_model1 <- logLik(logit_model_1)
+ll_model1
+```
+In our crime prediction model, the log-likelihood of -95.5015 shows how well the model fits the data. While the model fits reasonably well, there's still room for improvement, as a log-likelihood closer to zero would indicate a better fit. The df=14 means the model has 14 estimated parameters (including predictors and the intercept). As we move forward, we’ll use the Confusion Matrix, ROC curve, and AUC to evaluate the model’s performance and identify areas for improvement
+
+```{r, echo=FALSE}
+### Model 1 (Confusion Matrix, ROC curve, and AUC value)
+# Predict probabilities on the training data
+prediction_prob_train1 <- predict(logit_model_1, crime_training_data, type="response")
+
+# Predict classes (binary classification using a threshold of 0.5)
+threshold <- 0.5
+prediction_class_train1 <- ifelse(prediction_prob_train1 > threshold, 1, 0)
+```
+```{r, echo=TRUE}
+# Calculate performance metrics on the training dataset
+# Confusion Matrix
+conf_matrix_train1 <- confusionMatrix(as.factor(prediction_class_train1), 
+                                     as.factor(crime_training_data$target))
+print(conf_matrix_train1)
+```
+We are using a confusion matrix to assess the model's performance. The confusion matrix shows an accuracy of 91.63%, indicating that the model correctly predicted the crime rate classification in nearly 92% of cases. The sensitivity of 92.83% demonstrates the model's strong ability to identify neighborhoods with high crime, while the specificity of 90.39% shows it can accurately identify neighborhoods with low crime. Additionally, the model’s precision is 90.91%, meaning it’s highly reliable when predicting high-crime areas, and the negative predictive value of 92.41% indicates a high accuracy for predicting low-crime areas. The p-value of 0.5218 suggests no significant difference between false positives and false negatives. While the model is performing well, there is still room for improvement, and further analysis with the ROC curve and AUC will help refine the model's performance.
+```{r, echo=FALSE}
+# Accuracy
+accuracy1 <- sum(prediction_class_train1 == crime_training_data$target) / 
+  length(crime_training_data$target)
+cat("Accuracy: ", accuracy, "\n")
+
+# Classification Error Rate
+classification_error_rate1 <- 1 - accuracy1
+cat("Classification Error Rate: ", classification_error_rate1, "\n")
+
+# Precision
+precision1 <- conf_matrix_train1$byClass["Pos Pred Value"]
+cat("Precision: ", precision1, "\n")
+
+# Sensitivity (Recall or True Positive Rate)
+sensitivity1 <- conf_matrix_train1$byClass["Sensitivity"]
+cat("Sensitivity: ", sensitivity1, "\n")
+
+# Specificity (True Negative Rate)
+specificity1 <- conf_matrix_train1$byClass["Specificity"]
+cat("Specificity: ", specificity1, "\n")
+
+# F1 Score
+f1_score1 <- 2 * (precision1 * sensitivity1) / (precision1 + sensitivity1)
+cat("F1 Score: ", f1_score1, "\n")
+```
+```{r, echo=FALSE}
+# AUC (Area Under the Curve)
+roc_curve1 <- roc(crime_training_data$target, prediction_prob_train1)
+auc_value1 <- auc(roc_curve1)
+cat("AUC: ", auc_value1, "\n")
+
+# Plot ROC curve with AUC in the title
+plot(roc_curve1, main = paste("ROC Curve Model 1 - AUC:", 
+                             round(auc(roc_curve1), 2)), col = "red3")
+```
+The Area Under the Curve (AUC) test is important for evaluating the performance of the logistic regression model, as it provides a single value that summarizes the model's ability to distinguish between the two classes—high and low crime neighborhoods. A higher AUC indicates a better-performing model. The results show an AUC of 0.9744, which indicates that the model has excellent discriminative ability, performing well in distinguishing between neighborhoods with high and low crime rates.
 
 ### Model 2 (Manually Selected Variables)
 For Model 2, we manually select the predictor variables based on general considerations. We include ‘nox,’ which represents the nitrogen oxides concentration (in parts per 10 million), due to previous studies suggesting that high levels of air pollutants may correlate with increased crime rates. We also include ‘rad,’ the index of accessibility to radial highways, on the assumption that easier access to highways might facilitate the escape of individuals from crime scenes. The variable ‘tax,’ which represents the full-value property tax rate per $10,000, is included to examine whether neighborhoods with higher property tax rates might experience lower crime rates. Additionally, we include ‘ptratio,’ the pupil-teacher ratio by town, and ‘rm,’ the average number of rooms per dwelling, to explore potential relationships with crime rates, as studies suggest that individuals with lower-quality education may be more likely to engage in criminal activities later in life.

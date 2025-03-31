@@ -257,6 +257,18 @@ plot(roc_curve1, main = paste("ROC Curve Model 1 - AUC:",
 ```
 The Area Under the Curve (AUC) test is important for evaluating the performance of the logistic regression model, as it provides a single value that summarizes the model's ability to distinguish between the two classes—high and low crime neighborhoods. A higher AUC indicates a better-performing model. The results show an AUC of 0.9744, which indicates that the model has excellent discriminative ability, performing well in distinguishing between neighborhoods with high and low crime rates.
 
+# **Predictions Using Evaluation Data Set**
+Now that we know the model is valid, we can apply the model to the evaluation data. 
+```{r}
+# Make predictions on the evaluation dataset
+prediction_prob_eval_model1 <- predict(logit_model_1, 
+                                       crime_evaluation_data, type="response")
+
+# Predict classes using the same threshold of 0.5
+prediction_class_eval_model1 <- ifelse(logit_model_1 > 
+                                         threshold, 1, 0)
+print(prediction_class_eval_model1)
+```
 ### Model 2 (Manually Selected Variables)
 For Model 2, we manually select the predictor variables based on general considerations. We include ‘nox,’ which represents the nitrogen oxides concentration (in parts per 10 million), due to previous studies suggesting that high levels of air pollutants may correlate with increased crime rates. We also include ‘rad,’ the index of accessibility to radial highways, on the assumption that easier access to highways might facilitate the escape of individuals from crime scenes. The variable ‘tax,’ which represents the full-value property tax rate per $10,000, is included to examine whether neighborhoods with higher property tax rates might experience lower crime rates. Additionally, we include ‘ptratio,’ the pupil-teacher ratio by town, and ‘rm,’ the average number of rooms per dwelling, to explore potential relationships with crime rates, as studies suggest that individuals with lower-quality education may be more likely to engage in criminal activities later in life.
 

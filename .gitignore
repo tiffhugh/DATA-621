@@ -1,11 +1,11 @@
-# macOS system files
-.DS_Store
+# System files (macOS)
+**/.DS_Store
 
-# Assignment 2 generated files
-Assignment#2/*.html
-Assignment#2/*_files/
-Assignment#2/.DS_Store
+# HTML outputs
+**/*.html
 
-# Ignore gitignore files inside subfolders (optional)
-Assignment #3/.gitignore
+# Auto-generated folders from RMarkdown or browsers
+**/*_files/
 
+# Optional: ignore .gitignore files inside subfolders (if not managing submodules)
+**/.gitignore

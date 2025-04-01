@@ -36,7 +36,7 @@ View(crime_evaluation_data)
 ### Objective 
 For our third group assignment, we were provided with a dataset containing crime-related information for various neighborhoods in a major city. The dataset includes a binary response variable indicating whether a neighborhood’s crime rate is above the median (1) or below it (0). Our goal is to develop a binary logistic regression model using the training dataset to predict whether a given neighborhood is at risk for high crime levels. Through this analysis, we aim to identify key predictors of crime and assess the model's effectiveness in classification.
 
-The variables in this data compromise of: 
+The variables in this data comprise of: 
 • zn: proportion of residential land zoned for large lots (over 25000 square feet) (predictor variable)
 
 • indus: proportion of non-retail business acres per suburb (predictor variable)
@@ -227,7 +227,8 @@ For Model 3, we manually select predictor variables based on other relevant cons
 
 ```{r, echo=FALSE}
 # Model 3, choosing new predictive variables manually
-model3 <- glm(target ~ indus + nox + rm + rad + lstat, data = crime_training_data, family = "binomial")
+model3 <- glm(target ~ indus + nox + rm + rad + lstat, 
+              data = crime_training_data, family = "binomial")
 summary(model3)
 
 # plot residual vs. predicted plot
@@ -238,6 +239,10 @@ plot(sr3)
 ll_model3 <- logLik(model3)
 ll_model3
 ```
+**What criteria did we use to select each model?**
+Model 1 includes all predictors and acts as our baseline. It gives us a comprehensive look at what might drive crime rates, helping us not prematurely exclude anything important. It also had the best performance metrics: **Accuracy of 91.63%**, **AUC of 0.974**, and **F1 Score of 0.918**. But that high performance might be a double-edged sword — it can also mean overfitting since the model has 14 predictors.
+
+Model 2 and Model 3 use fewer variables, chosen based on theory and prior research. This makes them more interpretable and simpler to explain to a policymaker or community member. For example, Model 2 focuses on nox, rad, tax, ptratio, and rm because these variables have been shown to relate to crime in literature and logical reasoning. Model 3 takes a slightly different theoretical approach, focusing more on urban and socioeconomic characteristics like indus and lstat.
 
 # **Select Models**
 ### Model 1 (Confusion Matrix, ROC curve, and AUC value)
@@ -290,7 +295,7 @@ cat("AUC: ", auc_value1, "\n")
 plot(roc_curve1, main = paste("ROC Curve Model 1 - AUC:", 
                              round(auc(roc_curve1), 2)), col = "red3")
 ```
-We are using a confusion matrix to assess the model's performance. The confusion matrix shows an accuracy of 91.63%, indicating that the model correctly predicted the crime rate classification in nearly 92% of cases. The sensitivity of 92.83% demonstrates the model's strong ability to identify neighborhoods with high crime, while the specificity of 90.39% shows it can accurately identify neighborhoods with low crime. Additionally, the model’s precision is 90.91%, meaning it’s highly reliable when predicting high-crime areas, and the negative predictive value of 92.41% indicates a high accuracy for predicting low-crime areas. The p-value of 0.5218 suggests no significant difference between false positives and false negatives. While the model is performing well, there is still room for improvement, and further analysis with the ROC curve and AUC will help refine the model's performance.
+To assess Model 1’s performance, we use a confusion matrix. The confusion matrix shows an accuracy of 91.63%, indicating that the model correctly predicted the crime rate classification in nearly 92% of cases. The sensitivity of 92.83% demonstrates the model's strong ability to identify neighborhoods with high crime, while the specificity of 90.39% shows it can accurately identify neighborhoods with low crime. Additionally, the model’s precision is 90.91%, meaning it’s highly reliable when predicting high-crime areas, and the negative predictive value of 92.41% indicates a high accuracy for predicting low-crime areas. The p-value of 0.5218 suggests no significant difference between false positives and false negatives. While the model is performing well, there is still room for improvement, and further analysis with the ROC curve and AUC will help refine the model's performance.
 
 The Area Under the Curve (AUC) test is important for evaluating the performance of the logistic regression model, as it provides a single value that summarizes the model's ability to distinguish between the two classes—high and low crime neighborhoods. A higher AUC indicates a better-performing model. The results show an AUC of 0.9744, which indicates that the model has excellent discriminative ability, performing well in distinguishing between neighborhoods with high and low crime rates.
 
@@ -345,6 +350,19 @@ plot(roc_curve2, main = paste("ROC Curve Model 2 - AUC:",
 
 ```
 
+**Confusion Matrix and Statistics**
+
+- Accuracy: 0.8734
+- Classification Error Rate: 0.13
+- Precision: 0.86
+- Sensitivity: 0.9
+- Specificity: 0.84
+- F1 Score: 0.88
+- AUC: 0.97
+
+
+The confusion matrix for Model 2 shows strong performance overall. The accuracy of 87.34% and an AUC of 0.965 suggest that this simplified model still distinguishes well between high and low crime areas. It does trade off some specificity (84.3%) compared to Model 1, meaning it may incorrectly classify some low-crime areas as high crime. However, its interpretability and reduced complexity—only five predictors—make it more suitable for real-world use where simplicity matters.
+
 ### Model 3 (Confusion Matrix, ROC curve, and AUC value)
 ```{r, echo=FALSE}
 # Predict probabilities on the training data
@@ -395,6 +413,19 @@ plot(roc_curve3, main = paste("ROC Curve Model 3 - AUC:",
 
 ```
 
+**Confusion Matrix and Statistics**
+
+- Accuracy: 0.88
+- Classification Error Rate: 0.12
+- Precision: 0.85
+- Sensitivity: 0.92
+- Specificity: 0.84
+- F1 Score: 0.88
+- AUC: 0.96
+
+
+Model 3 maintains a high level of accuracy (88%) and sensitivity (92%), slightly outperforming Model 2 on those fronts. Its AUC of 0.96 still reflects strong discriminative ability, though slightly lower than Model 1. The model favors catching high-crime areas but may have a higher false positive rate, which policymakers should consider. Its real strength lies in using a minimal, well-theorized set of predictors focused on urban and socioeconomic factors.
+
 # **Predictions Using Evaluation Data Set**
 ### Model 1
 ```{r, echo=FALSE}
@@ -436,3 +467,38 @@ prediction_class_eval_model3 <- ifelse(prediction_prob_eval_model3 >
                                          threshold, 1, 0)
 print(prediction_class_eval_model3)
 ```
+While all three models produce similar predictions for many neighborhoods, subtle differences highlight how model complexity and variable choice impact outcomes. Model 2 and Model 3 tend to be more conservative in labeling high-crime areas.
+
+
+### ROC Curve Comparison
+
+To visualize and compare the discriminative performance of all three models, we plotted their ROC curves. This helps illustrate how each model balances sensitivity and specificity across different thresholds. As shown in the plot below, Model 1 has the highest AUC, but Model 2 closely follows, offering strong performance with fewer predictors.
+```{r, echo=FALSE}
+# Combined ROC curve plot for all three models
+plot(roc_curve1, col = "blue", lwd = 2, main = "ROC Curve Comparison")
+plot(roc_curve2, col = "red", lwd = 2, add = TRUE)
+plot(roc_curve3, col = "darkgreen", lwd = 2, add = TRUE)
+abline(a = 0, b = 1, lty = 2, col = "gray")
+
+legend("bottomright", legend = c(
+  paste("Model 1 (AUC =", round(auc(roc_curve1), 2), ")"),
+  paste("Model 2 (AUC =", round(auc(roc_curve2), 2), ")"),
+  paste("Model 3 (AUC =", round(auc(roc_curve3), 2), ")")
+), col = c("blue", "red", "darkgreen"), lwd = 2)
+```
+The ROC curve comparison above visually demonstrates the discriminative performance of all three models. Model 1 (blue curve) achieves the highest AUC (0.97), indicating the best ability to distinguish between high-crime and low-crime neighborhoods. However, its complexity with 14 predictors makes it less practical for real-world applications. 
+
+Model 2 (red curve) closely follows with an AUC of 0.97, offering nearly identical performance to Model 1 but with fewer predictors, making it simpler and more interpretable. Model 3 (green curve) has a slightly lower AUC (0.96) but still performs well, focusing on urban and socioeconomic predictors. 
+
+Overall, the plot highlights that Model 2 provides a strong balance between performance and simplicity, making it the most suitable choice for practical use.
+
+### Conclusion and Model Recommendation
+
+Conclusion and Model Recommendation
+While Model 1 delivers the best performance metrics with an AUC of 0.97 and accuracy above 91%, its complexity—with 14 predictors—makes it less practical for real-world decision-making. The risk of overfitting is also higher, which can reduce its reliability on unseen data. Additionally, its interpretability is limited due to the large number of predictors, which may make it difficult to communicate insights to stakeholders.
+
+Model 2 and Model 3 strike a better balance between simplicity and performance. Both models are more interpretable and easier to implement in practice while still maintaining strong predictive power. Model 3 achieves slightly better accuracy (88% vs. 87%) and sensitivity (92% vs. 90%) compared to Model 2. However, Model 2 edges ahead with the highest AUC (0.97 vs. 0.96) among the simplified models and uses a smaller set of predictors, making it more efficient and less prone to overfitting.
+
+The ROC curve comparison visually demonstrates that Model 2 provides nearly identical performance to Model 1 while being significantly simpler. Model 3 also performs well but has a slightly lower AUC. Given these considerations, Model 2 is our recommended model for predicting crime likelihood. It provides actionable insights with fewer predictors, making it suitable for both analysis and policy planning. Its balance between interpretability, simplicity, and performance makes it the most practical choice for real-world applications.
+
+For future work, we recommend validating Model 2 on additional evaluation datasets to confirm its generalizability and exploring potential interactions or transformations of predictors to further enhance its performance.

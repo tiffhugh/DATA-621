@@ -149,7 +149,7 @@ By using the correlation funnel above, we can guide our decision on which variab
 ### Model #1 : General Linear Models
 
 
-```{r, echo=TRUE}
+```{r, echo=FALSE}
 # build glm
 logit_model_1 <- glm(target ~ ., 
                      data = crime_training_data, 
@@ -186,7 +186,7 @@ Other predictors, such as zn, indus, chas, rm, age, lstat, and housing_age_value
 This analysis suggests that while some predictors significantly influence crime rates, others do not show strong associations, and their inclusion in the model could be reconsidered. A transformation can be done to see how more align predictors are to the target. 
 
 Now that we've run a GLM, the next step is to evaluate how well this model predicts crime. We'll start by running a residual diagnostic to assess model fit.
-```{r, echo=TRUE}
+```{r, echo=FALSE}
 library(DHARMa)
 # plot residual vs. predicted plot
 sr1 <- simulateResiduals(logit_model_1)
@@ -202,73 +202,6 @@ ll_model1
 ```
 In our crime prediction model, the log-likelihood of -95.5015 shows how well the model fits the data. While the model fits reasonably well, there's still room for improvement, as a log-likelihood closer to zero would indicate a better fit. The df=14 means the model has 14 estimated parameters (including predictors and the intercept). As we move forward, we’ll use the Confusion Matrix, ROC curve, and AUC to evaluate the model’s performance and identify areas for improvement
 
-```{r, echo=FALSE}
-### Model 1 (Confusion Matrix, ROC curve, and AUC value)
-# Predict probabilities on the training data
-prediction_prob_train1 <- predict(logit_model_1, crime_training_data, type="response")
-
-# Predict classes (binary classification using a threshold of 0.5)
-threshold <- 0.5
-prediction_class_train1 <- ifelse(prediction_prob_train1 > threshold, 1, 0)
-```
-```{r, echo=TRUE}
-# Calculate performance metrics on the training dataset
-# Confusion Matrix
-conf_matrix_train1 <- confusionMatrix(as.factor(prediction_class_train1), 
-                                     as.factor(crime_training_data$target))
-print(conf_matrix_train1)
-```
-We are using a confusion matrix to assess the model's performance. The confusion matrix shows an accuracy of 91.63%, indicating that the model correctly predicted the crime rate classification in nearly 92% of cases. The sensitivity of 92.83% demonstrates the model's strong ability to identify neighborhoods with high crime, while the specificity of 90.39% shows it can accurately identify neighborhoods with low crime. Additionally, the model’s precision is 90.91%, meaning it’s highly reliable when predicting high-crime areas, and the negative predictive value of 92.41% indicates a high accuracy for predicting low-crime areas. The p-value of 0.5218 suggests no significant difference between false positives and false negatives. While the model is performing well, there is still room for improvement, and further analysis with the ROC curve and AUC will help refine the model's performance.
-```{r, echo=FALSE}
-# Accuracy
-accuracy1 <- sum(prediction_class_train1 == crime_training_data$target) / 
-  length(crime_training_data$target)
-cat("Accuracy: ", accuracy, "\n")
-
-# Classification Error Rate
-classification_error_rate1 <- 1 - accuracy1
-cat("Classification Error Rate: ", classification_error_rate1, "\n")
-
-# Precision
-precision1 <- conf_matrix_train1$byClass["Pos Pred Value"]
-cat("Precision: ", precision1, "\n")
-
-# Sensitivity (Recall or True Positive Rate)
-sensitivity1 <- conf_matrix_train1$byClass["Sensitivity"]
-cat("Sensitivity: ", sensitivity1, "\n")
-
-# Specificity (True Negative Rate)
-specificity1 <- conf_matrix_train1$byClass["Specificity"]
-cat("Specificity: ", specificity1, "\n")
-
-# F1 Score
-f1_score1 <- 2 * (precision1 * sensitivity1) / (precision1 + sensitivity1)
-cat("F1 Score: ", f1_score1, "\n")
-```
-```{r, echo=FALSE}
-# AUC (Area Under the Curve)
-roc_curve1 <- roc(crime_training_data$target, prediction_prob_train1)
-auc_value1 <- auc(roc_curve1)
-cat("AUC: ", auc_value1, "\n")
-
-# Plot ROC curve with AUC in the title
-plot(roc_curve1, main = paste("ROC Curve Model 1 - AUC:", 
-                             round(auc(roc_curve1), 2)), col = "red3")
-```
-The Area Under the Curve (AUC) test is important for evaluating the performance of the logistic regression model, as it provides a single value that summarizes the model's ability to distinguish between the two classes—high and low crime neighborhoods. A higher AUC indicates a better-performing model. The results show an AUC of 0.9744, which indicates that the model has excellent discriminative ability, performing well in distinguishing between neighborhoods with high and low crime rates.
-
-# **Predictions Using Evaluation Data Set**
-Now that we know the model is valid, we can apply the model to the evaluation data. 
-```{r}
-# Make predictions on the evaluation dataset
-prediction_prob_eval_model1 <- predict(logit_model_1, 
-                                       crime_evaluation_data, type="response")
-
-# Predict classes using the same threshold of 0.5
-prediction_class_eval_model1 <- ifelse(logit_model_1 > 
-                                         threshold, 1, 0)
-print(prediction_class_eval_model1)
-```
 ### Model 2 (Manually Selected Variables)
 For Model 2, we manually select the predictor variables based on general considerations. We include ‘nox,’ which represents the nitrogen oxides concentration (in parts per 10 million), due to previous studies suggesting that high levels of air pollutants may correlate with increased crime rates. We also include ‘rad,’ the index of accessibility to radial highways, on the assumption that easier access to highways might facilitate the escape of individuals from crime scenes. The variable ‘tax,’ which represents the full-value property tax rate per $10,000, is included to examine whether neighborhoods with higher property tax rates might experience lower crime rates. Additionally, we include ‘ptratio,’ the pupil-teacher ratio by town, and ‘rm,’ the average number of rooms per dwelling, to explore potential relationships with crime rates, as studies suggest that individuals with lower-quality education may be more likely to engage in criminal activities later in life.
 
@@ -289,71 +222,6 @@ ll_model2 <- logLik(model2)
 ll_model2
 ```
 
-# **Select Models**
-### Model 2 (Confusion Matrix, ROC curve, and AUC value)
-```{r, echo=FALSE}
-library(caret)
-# Predict probabilities on the training data
-prediction_prob_train <- predict(model2, crime_training_data, type="response")
-
-# Predict classes (binary classification using a threshold of 0.5)
-threshold <- 0.5
-prediction_class_train <- ifelse(prediction_prob_train > threshold, 1, 0)
-
-# Calculate performance metrics on the training dataset
-# Confusion Matrix
-conf_matrix_train <- confusionMatrix(as.factor(prediction_class_train), 
-                                     as.factor(crime_training_data$target))
-print(conf_matrix_train)
-
-# Accuracy
-accuracy <- sum(prediction_class_train == crime_training_data$target) / 
-  length(crime_training_data$target)
-cat("Accuracy: ", accuracy, "\n")
-
-# Classification Error Rate
-classification_error_rate <- 1 - accuracy
-cat("Classification Error Rate: ", classification_error_rate, "\n")
-
-# Precision
-precision <- conf_matrix_train$byClass["Pos Pred Value"]
-cat("Precision: ", precision, "\n")
-
-# Sensitivity (Recall or True Positive Rate)
-sensitivity <- conf_matrix_train$byClass["Sensitivity"]
-cat("Sensitivity: ", sensitivity, "\n")
-
-# Specificity (True Negative Rate)
-specificity <- conf_matrix_train$byClass["Specificity"]
-cat("Specificity: ", specificity, "\n")
-
-# F1 Score
-f1_score <- 2 * (precision * sensitivity) / (precision + sensitivity)
-cat("F1 Score: ", f1_score, "\n")
-
-# AUC (Area Under the Curve)
-roc_curve <- roc(crime_training_data$target, prediction_prob_train)
-auc_value <- auc(roc_curve)
-cat("AUC: ", auc_value, "\n")
-
-# Plot ROC curve with AUC in the title
-plot(roc_curve, main = paste("ROC Curve Model 2 - AUC:", 
-                             round(auc(roc_curve), 2)), col = "red")
-
-```
-# **Predictions Using Evaluation Data Set**
-### Model 2
-```{r}
-# Make predictions on the evaluation dataset
-prediction_prob_eval_model2 <- predict(model2, 
-                                       crime_evaluation_data, type="response")
-
-# Predict classes using the same threshold of 0.5
-prediction_class_eval_model2 <- ifelse(prediction_prob_eval_model2 > 
-                                         threshold, 1, 0)
-print(prediction_class_eval_model2)
-```
-
 ### Model 3 (Manually Selected Other Variables)
 For Model 3, we manually select predictor variables based on other relevant considerations. We include 'indus,' which indicates the proportion of non-retail business acres per suburb. A higher proportion may suggest increased urban density, potentially linked to crime rates. We also use 'nox,' measuring nitrogen oxides concentration (in parts per 10 million), since areas with higher pollution levels often have lower-income populations due to industrial activity, heavy traffic, or poor urban planning. The variable 'rm,' representing the average number of rooms per dwelling, may indicate affluence and its relationship to crime. Additionally, 'rad' assesses highway accessibility, which may facilitate crime due to ease of movement. Finally, we include 'lstat,' a measure of socioeconomic status that is often associated with crime trends.
 
@@ -372,6 +240,111 @@ ll_model3
 ```
 
 # **Select Models**
+### Model 1 (Confusion Matrix, ROC curve, and AUC value)
+```{r, echo=FALSE}
+library(caret)
+# Predict probabilities on the training data
+prediction_prob_train1 <- predict(logit_model_1, crime_training_data, type="response")
+
+# Predict classes (binary classification using a threshold of 0.5)
+threshold <- 0.5
+prediction_class_train1 <- ifelse(prediction_prob_train1 > threshold, 1, 0)
+
+# Calculate performance metrics on the training dataset
+# Confusion Matrix
+conf_matrix_train1 <- confusionMatrix(as.factor(prediction_class_train1), 
+                                     as.factor(crime_training_data$target))
+print(conf_matrix_train1)
+
+# Accuracy
+accuracy1 <- sum(prediction_class_train1 == crime_training_data$target) / 
+  length(crime_training_data$target)
+cat("Accuracy: ", accuracy1, "\n")
+
+# Classification Error Rate
+classification_error_rate1 <- 1 - accuracy1
+cat("Classification Error Rate: ", classification_error_rate1, "\n")
+
+# Precision
+precision1 <- conf_matrix_train1$byClass["Pos Pred Value"]
+cat("Precision: ", precision1, "\n")
+
+# Sensitivity (Recall or True Positive Rate)
+sensitivity1 <- conf_matrix_train1$byClass["Sensitivity"]
+cat("Sensitivity: ", sensitivity1, "\n")
+
+# Specificity (True Negative Rate)
+specificity1 <- conf_matrix_train1$byClass["Specificity"]
+cat("Specificity: ", specificity1, "\n")
+
+# F1 Score
+f1_score1 <- 2 * (precision1 * sensitivity1) / (precision1 + sensitivity1)
+cat("F1 Score: ", f1_score1, "\n")
+
+# AUC (Area Under the Curve)
+roc_curve1 <- roc(crime_training_data$target, prediction_prob_train1)
+auc_value1 <- auc(roc_curve1)
+cat("AUC: ", auc_value1, "\n")
+
+# Plot ROC curve with AUC in the title
+plot(roc_curve1, main = paste("ROC Curve Model 1 - AUC:", 
+                             round(auc(roc_curve1), 2)), col = "red3")
+```
+We are using a confusion matrix to assess the model's performance. The confusion matrix shows an accuracy of 91.63%, indicating that the model correctly predicted the crime rate classification in nearly 92% of cases. The sensitivity of 92.83% demonstrates the model's strong ability to identify neighborhoods with high crime, while the specificity of 90.39% shows it can accurately identify neighborhoods with low crime. Additionally, the model’s precision is 90.91%, meaning it’s highly reliable when predicting high-crime areas, and the negative predictive value of 92.41% indicates a high accuracy for predicting low-crime areas. The p-value of 0.5218 suggests no significant difference between false positives and false negatives. While the model is performing well, there is still room for improvement, and further analysis with the ROC curve and AUC will help refine the model's performance.
+
+The Area Under the Curve (AUC) test is important for evaluating the performance of the logistic regression model, as it provides a single value that summarizes the model's ability to distinguish between the two classes—high and low crime neighborhoods. A higher AUC indicates a better-performing model. The results show an AUC of 0.9744, which indicates that the model has excellent discriminative ability, performing well in distinguishing between neighborhoods with high and low crime rates.
+
+### Model 2 (Confusion Matrix, ROC curve, and AUC value)
+```{r, echo=FALSE}
+# Predict probabilities on the training data
+prediction_prob_train2 <- predict(model2, crime_training_data, type="response")
+
+# Predict classes (binary classification using a threshold of 0.5)
+threshold <- 0.5
+prediction_class_train2 <- ifelse(prediction_prob_train2 > threshold, 1, 0)
+
+# Calculate performance metrics on the training dataset
+# Confusion Matrix
+conf_matrix_train2 <- confusionMatrix(as.factor(prediction_class_train2), 
+                                     as.factor(crime_training_data$target))
+print(conf_matrix_train2)
+
+# Accuracy
+accuracy2 <- sum(prediction_class_train2 == crime_training_data$target) / 
+  length(crime_training_data$target)
+cat("Accuracy: ", accuracy2, "\n")
+
+# Classification Error Rate
+classification_error_rate2 <- 1 - accuracy2
+cat("Classification Error Rate: ", classification_error_rate2, "\n")
+
+# Precision
+precision2 <- conf_matrix_train2$byClass["Pos Pred Value"]
+cat("Precision: ", precision2, "\n")
+
+# Sensitivity (Recall or True Positive Rate)
+sensitivity2 <- conf_matrix_train2$byClass["Sensitivity"]
+cat("Sensitivity: ", sensitivity2, "\n")
+
+# Specificity (True Negative Rate)
+specificity2 <- conf_matrix_train2$byClass["Specificity"]
+cat("Specificity: ", specificity2, "\n")
+
+# F1 Score
+f1_score <- 2 * (precision2 * sensitivity2) / (precision2 + sensitivity2)
+cat("F1 Score: ", f1_score, "\n")
+
+# AUC (Area Under the Curve)
+roc_curve2 <- roc(crime_training_data$target, prediction_prob_train2)
+auc_value2 <- auc(roc_curve2)
+cat("AUC: ", auc_value2, "\n")
+
+# Plot ROC curve with AUC in the title
+plot(roc_curve2, main = paste("ROC Curve Model 2 - AUC:", 
+                             round(auc(roc_curve2), 2)), col = "blue")
+
+```
+
 ### Model 3 (Confusion Matrix, ROC curve, and AUC value)
 ```{r, echo=FALSE}
 # Predict probabilities on the training data
@@ -417,14 +390,43 @@ auc_value3 <- auc(roc_curve3)
 cat("AUC: ", auc_value3, "\n")
 
 # Plot ROC curve with AUC in the title
-plot(roc_curve3, main = paste("ROC Curve Model 2 - AUC:", 
+plot(roc_curve3, main = paste("ROC Curve Model 3 - AUC:", 
                              round(auc(roc_curve3), 2)), col = "green4")
 
 ```
 
 # **Predictions Using Evaluation Data Set**
+### Model 1
+```{r, echo=FALSE}
+
+crime_evaluation_data$housing_age_value_ratio <- 
+  crime_evaluation_data$age / crime_evaluation_data$medv
+head(crime_evaluation_data[, c("age", "medv", "housing_age_value_ratio")])
+
+# Make predictions on the evaluation dataset
+prediction_prob_eval_model1 <- predict(logit_model_1, 
+                                       crime_evaluation_data, type="response")
+
+# Predict classes using the same threshold of 0.5
+prediction_class_eval_model1 <- ifelse(prediction_prob_eval_model1 > 
+                                         threshold, 1, 0)
+print(prediction_class_eval_model1)
+```
+
+### Model 2
+```{r, echo=FALSE}
+# Make predictions on the evaluation dataset
+prediction_prob_eval_model2 <- predict(model2, 
+                                       crime_evaluation_data, type="response")
+
+# Predict classes using the same threshold of 0.5
+prediction_class_eval_model2 <- ifelse(prediction_prob_eval_model2 > 
+                                         threshold, 1, 0)
+print(prediction_class_eval_model2)
+```
+
 ### Model 3
-```{r}
+```{r, echo=FALSE}
 # Make predictions on the evaluation dataset
 prediction_prob_eval_model3 <- predict(model3, 
                                        crime_evaluation_data, type="response")

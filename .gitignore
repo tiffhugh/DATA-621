@@ -1,0 +1,11 @@
+# macOS system files
+.DS_Store
+
+# Assignment 2 generated files
+Assignment#2/*.html
+Assignment#2/*_files/
+Assignment#2/.DS_Store
+
+# Ignore gitignore files inside subfolders (optional)
+Assignment #3/.gitignore
+

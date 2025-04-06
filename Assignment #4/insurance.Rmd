@@ -1,0 +1,183 @@
+---
+title: "HW4"
+author: "Bedros, Haig; Dela Cruz, Sandra; Hugh, Tiffany; Li, Yanyi"
+date: "`r Sys.Date()`"
+output: 
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+<style type="text/css">
+
+h1.title {
+  font-size: 26px;
+  color: Black;
+  text-align: center;
+}
+h4.author { 
+  font-size: 18px;
+  color: Black;
+  text-align: center;
+}
+h4.date {
+  font-size: 12px;
+  color: Black;
+  text-align: center;
+}
+</style>
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(tidy.opts = list(width.cutoff = 50), tidy = TRUE, warning = FALSE)
+```
+
+```{r, include=FALSE}
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(tidyr)
+library(purrr)
+library(DataExplorer)
+library(reshape2)
+library(pROC)
+library(readr)
+library(caret)
+library(DHARMa)
+library(lares)
+```
+
+```{r, include=FALSE}
+# Import dataset
+insurance_training_data <- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/Assignment%20%234/insurance_training_data.csv")
+View(insurance_training_data)
+
+insurance_evaluation_data<- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/Assignment%20%234/insurance-evaluation-data%20(1).csv")
+```
+
+# **Data Exploration**
+
+First, let's remove the 'INDEX' column in both of the dataset, since we are not going to need it.
+```{r, echo=FALSE}
+# remove index columns
+insurance_training_data <- insurance_training_data %>% select(-INDEX)
+glimpse(insurance_training_data)
+dim(insurance_training_data)
+
+# do the same for evaluation data
+insurance_evaluation_data <- insurance_evaluation_data %>% select(-INDEX)
+```
+Our insurance training dataset has 8,161 observations and 25 columns. As we can see, there are a lot of data transformations that needs to be done with our variables, like cleaning our values and changing the columns into categorical or numerical.
+
+### Data Transformation of Variables
+First, let's clean our values by removing unecessary characters such as 'z_', '$', and ','
+```{r, echo=FALSE}
+# clean the values in our variables by removing 'z_', '$', and ','
+insurance_training_data <- insurance_training_data %>% 
+  mutate(across(everything(), ~gsub("z_|\\$|\\,","", .x)))
+glimpse(insurance_training_data)
+
+insurance_evaluation_data <- insurance_evaluation_data %>%
+  mutate(across(everything(), ~gsub("z_|\\$|\\,", "", .x)))
+```
+Now that we have removed these unnecessary characters in our values, let's review our distinct values.
+```{r, echo=FALSE}
+# check distinct values for all columns
+insurance_training_data %>% summarise(across(everything(), ~n_distinct(.)))
+
+# check unique values in possibly categorical columns
+insurance_training_data %>% 
+  distinct(KIDSDRIV, PARENT1, MSTATUS, SEX, EDUCATION, JOB, CAR_USE, CAR_TYPE,
+           RED_CAR, REVOKED, URBANICITY) %>% 
+  map(~unique(.))
+```
+As we can see, 'NA' is present for the `JOB` column. Further investigation with our dataset showed that these individuals with 'NA' in the `JOB` column completed either 'Masters' or 'PhD'; however, we'll fill in the 'NA' with 'Other' just for general consideration and also to prevent bias. 
+```{r, echo=FALSE}
+# fill the missing 'JOB' values with 'Self-employed/ Freelance'
+insurance_training_data <- insurance_training_data %>% 
+  mutate(JOB = ifelse(is.na(JOB), 'Other', JOB))
+# view changes
+insurance_training_data %>% 
+  distinct(JOB)
+
+# do the same for evaluation data
+insurance_evaluation_data <- insurance_evaluation_data %>% 
+  mutate(JOB = ifelse(is.na(JOB), 'Other', JOB))
+```
+Now, let's proceed with converting our columns to the appropriate data types, such as factors, numeric, or ordinal variables
+Convert to factor variables: `TARGET_FLAG`, `KIDSDRIV`, `MSTATUS`, `SEX`, `EDUCATION`, `JOB`, `CAR_USE`, `CAR_TYPE`, `RED_CAR`, `REVOKED`, `URBANICITY`
+Convert to numeric variables: `TARGET_AMT`, `AGE`, `HOMEKIDS`, `YOJ`, `INCOME`, `HOME_VAL`, `TRAVTIME`, `BLUEBOOK`, `TIF`, `OLDCLAIM`, `CAR_AGE`, `URBANICITY`
+Convert to ordinal variables: `CLM_FREQ`, `MVR_PTS`
+```{r, echo=FALSE}
+insurance_training_data <- insurance_training_data %>% 
+  mutate(
+    # convert all factor variables
+    across(c(TARGET_FLAG, KIDSDRIV, MSTATUS, SEX, EDUCATION, JOB, CAR_USE,
+             CAR_TYPE, RED_CAR, REVOKED, URBANICITY), as.factor),
+    # convert all numeric variables
+    across(c(TARGET_AMT, AGE, HOMEKIDS, YOJ, INCOME, HOME_VAL, TRAVTIME,
+             BLUEBOOK, TIF, OLDCLAIM, CAR_AGE, URBANICITY), as.numeric),
+    # convert all ordinal variables
+    across(c(CLM_FREQ, MVR_PTS), as.ordered)
+  )
+
+glimpse(insurance_training_data)
+
+# do the same for evaluation data
+insurance_evaluation_data <- insurance_evaluation_data %>% 
+  mutate(
+    # convert all factor variables
+    across(c(TARGET_FLAG, KIDSDRIV, MSTATUS, SEX, EDUCATION, JOB, CAR_USE,
+             CAR_TYPE, RED_CAR, REVOKED, URBANICITY), as.factor),
+    # convert all numeric variables
+    across(c(TARGET_AMT, AGE, HOMEKIDS, YOJ, INCOME, HOME_VAL, TRAVTIME,
+             BLUEBOOK, TIF, OLDCLAIM, CAR_AGE, URBANICITY), as.numeric),
+    # convert all ordinal variables
+    across(c(CLM_FREQ, MVR_PTS), as.ordered)
+  )
+```
+### Summary of Datasets
+Here we see 'NA' values with `AGE`, `YOJ`, `INCOME`, `HOME_VAL`, and `CAR_AGE`. Later we'll impute each of these missing values.
+
+```{r, echo=FALSE}
+#| fig-height: 3
+#| fig-width: 8
+cat("Summary of training data: \n")
+summary(insurance_training_data)
+```
+### Histogram of Continuous Variables
+```{r, echo=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+plot_histogram(insurance_training_data)
+plot_boxplot(insurance_training_data, by='TARGET_FLAG')
+```
+With the view of our histogram, we can see that most of our continuous data are skewed to the right.
+
+### Bar Chart of Categorical Variables
+```{r, echo=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+plot_bar(insurance_training_data)
+```
+Our bar chart reveals a lot about our dataset, such as the fact that most of our customers have 'Blue Collar' jobs, own either an 'SUV' or 'Minivan', are 'High School Graduates' or hold a 'Bachelor's' degree, are single parents (based on `PARENT1`), do not have a ticket (based on `MVR_PTS`), and live in urban areas.
+
+### Boxplot of Some Variables
+```{r, echo=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+plot_boxplot(insurance_training_data, by='TARGET_FLAG')
+```
+The boxplot above separates the data by the TARGET_FLAG variable. Although there are noticeable outliers in our data, we will retain them as they make sense in real-world scenarios. For example, someone could have worked for a long time at a particular company (variable `YOJ`), or someone might use their car for commercial purposes (variable `TRAV_TIME`).
+
+### Visual Correlation of Variables
+```{r, echo=FALSE, message=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+corr_cross(insurance_training_data, 
+           method = "spearman", max_pvalue = 0.05, top = 20)
+
+corr_cross(insurance_training_data, 
+           method = "spearman", max_pvalue = 0.05, 
+           contains = c('TARGET_AMT', 'TARGET_FLAG'))
+```
+To visualize correlations, we use the 'corr_cross' function from the 'lares' package, which allows us to easily compare variables. We set the method to 'Spearman' since we know that most of our data is not normally distributed. In the first cross-correlation graph, we can see that 'OLDCLAIM' is highly correlated with 'CLM_FREQ,' with correlations gradually decreasing as we move down the list to variables with weaker correlations. In the second correlation graph, we observe that our predictor variables are not strongly correlated with the target variables. With all this information, we can now proceed with our data preparation.
+
+# **Data Preparation**

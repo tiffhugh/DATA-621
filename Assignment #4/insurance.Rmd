@@ -179,3 +179,31 @@ corr_cross(insurance_training_data,
 To visualize correlations, we use the 'corr_cross' function from the 'lares' package, which allows us to easily compare variables. We set the method to 'Spearman' since we know that most of our data is not normally distributed. In the first cross-correlation graph, we can see that 'OLDCLAIM' is highly correlated with 'CLM_FREQ,' with correlations gradually decreasing as we move down the list to variables with weaker correlations. In the second correlation graph, we observe that our predictor variables are not strongly correlated with the target variables. With all this information, we can now proceed with our data preparation.
 
 # **Data Preparation**
+For the variable `HOME_VAL`, we observed that there are 2,294 instances where the value is zero. We have made the assumption that these individuals are likely renters, as they do not own a home. For the records where `HOME_VAL` is missing, we have decided to label them as 'Unknown'. This is because we are unsure of their homeownership status, and by assigning them as 'Unknown', we avoid introducing any bias into our analysis.
+
+```{r, echo=FALSE}
+# Count zero's in 'HOME_VAL'
+zero_count <- sum(insurance_training_data$HOME_VAL == 0, na.rm = TRUE)
+cat("Zero count for HOME_VAL: \n")
+print(zero_count)
+```
+
+In this step, we are creating a new variable called `HOME_STATUS` based on the values of `HOME_VAL`:
+
+- Individuals with`HOME_VAL` > 0 will be categorized as 'Homeowners'.
+
+- Individuals with `HOME_VAL` == 0 will be categorized as 'Renters'.
+
+- Missing values (NA) in `HOME_VAL` will be labeled as 'Unknown', as we cannot determine their homeownership status.
+```{r, echo=FALSE}
+# create new variable 'HOME_STATUS' to separate renters, homeowners, and unknown
+insurance_training_data <- insurance_training_data %>% 
+  mutate(HOME_STATUS = case_when(
+    is.na(HOME_VAL) ~ "Unknown",
+    HOME_VAL == 0 ~"Renter",
+    TRUE ~ "Homeowner"
+  )) %>% 
+  mutate(HOME_STATUS = factor(HOME_STATUS, levels = c("Homeowner", "Renter", "Unknown")))
+
+head(insurance_training_data[, c("HOME_VAL", "HOME_STATUS")])
+```

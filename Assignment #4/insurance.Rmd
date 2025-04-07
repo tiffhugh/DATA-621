@@ -65,15 +65,15 @@ insurance_evaluation_data <- insurance_evaluation_data %>% select(-INDEX)
 Our insurance training dataset has 8,161 observations and 25 columns. As we can see, there are a lot of data transformations that needs to be done with our variables, like cleaning our values and changing the columns into categorical or numerical.
 
 ### Data Transformation of Variables
-First, let's clean our values by removing unecessary characters such as 'z_', '$', and ','
+First, let's clean our values by removing unecessary characters such as 'z_', '$', ',', and '-'.
 ```{r, echo=FALSE}
 # clean the values in our variables by removing 'z_', '$', and ','
 insurance_training_data <- insurance_training_data %>% 
-  mutate(across(everything(), ~gsub("z_|\\$|\\,","", .x)))
+  mutate(across(everything(), ~gsub("z_|\\$|\\,|\\-","", .x)))
 glimpse(insurance_training_data)
 
 insurance_evaluation_data <- insurance_evaluation_data %>%
-  mutate(across(everything(), ~gsub("z_|\\$|\\,", "", .x)))
+  mutate(across(everything(), ~gsub("z_|\\$|\\,|\\-", "", .x)))
 ```
 Now that we have removed these unnecessary characters in our values, let's review our distinct values.
 ```{r, echo=FALSE}

@@ -206,4 +206,41 @@ insurance_training_data <- insurance_training_data %>%
   mutate(HOME_STATUS = factor(HOME_STATUS, levels = c("Homeowner", "Renter", "Unknown")))
 
 head(insurance_training_data[, c("HOME_VAL", "HOME_STATUS")])
+
+# do the same for evaluation dataset
+insurance_evaluation_data <- insurance_evaluation_data %>% 
+  mutate(HOME_STATUS = case_when(
+    is.na(HOME_VAL) ~ "Unknown",
+    HOME_VAL == 0 ~"Renter",
+    TRUE ~ "Homeowner"
+  )) %>% 
+  mutate(HOME_STATUS = factor(HOME_STATUS, levels = c("Homeowner", "Renter", "Unknown")))
+```
+
+Now that we categorize the homeownership, let's delete the `HOME_VAL` column for us to proceed in other imputation of our columns.
+```{r, echo=FALSE}
+insurance_training_data <- insurance_training_data %>% 
+  select(-HOME_VAL)
+colnames(insurance_training_data)
+
+insurance_evaluation_data <- insurance_evaluation_data %>% 
+  select(-HOME_VAL)
+```
+
+For the variable `AGE`, `YOJ`, `INCOME`, `CAR_AGE`, we'll use the PMM imputation from the `mice` package.
+```{r, echo=FALSE}
+# mice imputation
+input_training = insurance_training_data
+method_vector <- c("", "", "", "pmm", "",
+                   "pmm", "pmm", "", "", "",
+                   "", "", "", "", "",
+                   "", "", "", "", "",
+                   "", "", "pmm", "", ""
+                   )
+mice_imp = mice(input_training, m = 10, 
+                method = method_vector)
+summary(input_training$AGE)
+mice_imp$imp$AGE
+clean_insurance_training_data <- complete(mice_imp, 10)
+summary(clean_insurance_training_data)
 ```

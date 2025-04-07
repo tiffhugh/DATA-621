@@ -47,8 +47,6 @@ library(lares)
 ```{r, include=FALSE}
 # Import dataset
 insurance_training_data <- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/Assignment%20%234/insurance_training_data.csv")
-View(insurance_training_data)
-
 insurance_evaluation_data<- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/Assignment%20%234/insurance-evaluation-data%20(1).csv")
 ```
 

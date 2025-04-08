@@ -101,14 +101,14 @@ insurance_evaluation_data <- insurance_evaluation_data %>%
   mutate(JOB = ifelse(is.na(JOB), 'Other', JOB))
 ```
 Now, let's proceed with converting our columns to the appropriate data types, such as factors, numeric, or ordinal variables
-Convert to factor variables: `TARGET_FLAG`, `KIDSDRIV`, `MSTATUS`, `SEX`, `EDUCATION`, `JOB`, `CAR_USE`, `CAR_TYPE`, `RED_CAR`, `REVOKED`, `URBANICITY`
+Convert to factor variables: `TARGET_FLAG`, `KIDSDRIV`, `PARENT1`, `MSTATUS`, `SEX`, `EDUCATION`, `JOB`, `CAR_USE`, `CAR_TYPE`, `RED_CAR`, `REVOKED`, `URBANICITY`
 Convert to numeric variables: `TARGET_AMT`, `AGE`, `HOMEKIDS`, `YOJ`, `INCOME`, `HOME_VAL`, `TRAVTIME`, `BLUEBOOK`, `TIF`, `OLDCLAIM`, `CAR_AGE`, `URBANICITY`
 Convert to ordinal variables: `CLM_FREQ`, `MVR_PTS`
 ```{r, echo=FALSE}
 insurance_training_data <- insurance_training_data %>% 
   mutate(
     # convert all factor variables
-    across(c(TARGET_FLAG, KIDSDRIV, MSTATUS, SEX, EDUCATION, JOB, CAR_USE,
+    across(c(TARGET_FLAG, KIDSDRIV, PARENT1, MSTATUS, SEX, EDUCATION, JOB, CAR_USE,
              CAR_TYPE, RED_CAR, REVOKED, URBANICITY), as.factor),
     # convert all numeric variables
     across(c(TARGET_AMT, AGE, HOMEKIDS, YOJ, INCOME, HOME_VAL, TRAVTIME,
@@ -123,7 +123,7 @@ glimpse(insurance_training_data)
 insurance_evaluation_data <- insurance_evaluation_data %>% 
   mutate(
     # convert all factor variables
-    across(c(TARGET_FLAG, KIDSDRIV, MSTATUS, SEX, EDUCATION, JOB, CAR_USE,
+    across(c(TARGET_FLAG, KIDSDRIV, PARENT1, MSTATUS, SEX, EDUCATION, JOB, CAR_USE,
              CAR_TYPE, RED_CAR, REVOKED, URBANICITY), as.factor),
     # convert all numeric variables
     across(c(TARGET_AMT, AGE, HOMEKIDS, YOJ, INCOME, HOME_VAL, TRAVTIME,
@@ -248,4 +248,16 @@ mice_imp$imp$AGE
 clean_insurance_training_data <- complete(mice_imp, 4)
 summary(clean_insurance_training_data)
 plot_histogram(clean_insurance_training_data)
+
+# do the same for evaluation data
+input_evaluation = insurance_evaluation_data
+method_vector_eval <- c("", "", "", "pmm", "",
+                   "pmm", "pmm", "", "", "",
+                   "", "", "", "", "",
+                   "", "", "", "", "",
+                   "", "", "pmm", "", ""
+                   )
+mice_imp_eval = mice(input_evaluation, m = 5, 
+                method = method_vector)
+clean_insurance_evaluation_data <- complete(mice_imp_eval, 4)
 ```

@@ -42,6 +42,7 @@ library(readr)
 library(caret)
 library(DHARMa)
 library(lares)
+library(mice)
 ```
 
 ```{r, include=FALSE}
@@ -179,6 +180,7 @@ corr_cross(insurance_training_data,
 To visualize correlations, we use the 'corr_cross' function from the 'lares' package, which allows us to easily compare variables. We set the method to 'Spearman' since we know that most of our data is not normally distributed. In the first cross-correlation graph, we can see that 'OLDCLAIM' is highly correlated with 'CLM_FREQ,' with correlations gradually decreasing as we move down the list to variables with weaker correlations. In the second correlation graph, we observe that our predictor variables are not strongly correlated with the target variables. With all this information, we can now proceed with our data preparation.
 
 # **Data Preparation**
+### Change of Variable
 For the variable `HOME_VAL`, we observed that there are 2,294 instances where the value is zero. We have made the assumption that these individuals are likely renters, as they do not own a home. For the records where `HOME_VAL` is missing, we have decided to label them as 'Unknown'. This is because we are unsure of their homeownership status, and by assigning them as 'Unknown', we avoid introducing any bias into our analysis.
 
 ```{r, echo=FALSE}
@@ -226,7 +228,7 @@ colnames(insurance_training_data)
 insurance_evaluation_data <- insurance_evaluation_data %>% 
   select(-HOME_VAL)
 ```
-
+### Imputation of Variables
 For the variables `AGE`, `YOJ`, `INCOME`, and `CAR_AGE`, we will use Predictive Mean Matching (PMM) imputation from the mice package. PMM is a general imputation method that ensures missing values are replaced with observed values, helping to maintain the original relationships in the data, including non-linear ones. We’ll set the number of imputations (m) to 5, as it’s a large dataset and this is a standard choice. We will also leave the default maximum iterations (maxit) at 5."
 ```{r, echo=FALSE}
 # mice imputation

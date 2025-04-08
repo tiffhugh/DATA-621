@@ -227,7 +227,7 @@ insurance_evaluation_data <- insurance_evaluation_data %>%
   select(-HOME_VAL)
 ```
 
-For the variable `AGE`, `YOJ`, `INCOME`, `CAR_AGE`, we'll use the PMM imputation from the `mice` package.
+For the variables `AGE`, `YOJ`, `INCOME`, and `CAR_AGE`, we will use Predictive Mean Matching (PMM) imputation from the mice package. PMM is a general imputation method that ensures missing values are replaced with observed values, helping to maintain the original relationships in the data, including non-linear ones. We’ll set the number of imputations (m) to 5, as it’s a large dataset and this is a standard choice. We will also leave the default maximum iterations (maxit) at 5."
 ```{r, echo=FALSE}
 # mice imputation
 input_training = insurance_training_data
@@ -237,10 +237,11 @@ method_vector <- c("", "", "", "pmm", "",
                    "", "", "", "", "",
                    "", "", "pmm", "", ""
                    )
-mice_imp = mice(input_training, m = 10, 
+mice_imp = mice(input_training, m = 5, 
                 method = method_vector)
 summary(input_training$AGE)
 mice_imp$imp$AGE
-clean_insurance_training_data <- complete(mice_imp, 10)
+clean_insurance_training_data <- complete(mice_imp, 4)
 summary(clean_insurance_training_data)
+plot_histogram(clean_insurance_training_data)
 ```

@@ -261,3 +261,91 @@ mice_imp_eval = mice(input_evaluation, m = 5,
                 method = method_vector_eval)
 clean_insurance_evaluation_data <- complete(mice_imp_eval, 4)
 ```
+
+### TARGET_FLAG Distribution
+
+Now that the data is clean and imputed, we want to confirm the distribution of people who crashed vs. who didn't crash.
+
+```{r}
+# making sure TARGET_FLAG is numeric
+insurance_training_data$TARGET_FLAG <- as.numeric(as.character(insurance_training_data$TARGET_FLAG))
+
+# choosing relevant predictors
+logit_data <- insurance_training_data %>%
+  drop_na(AGE, INCOME, MSTATUS, SEX, CAR_USE, EDUCATION, RED_CAR, CLM_FREQ, MVR_PTS)
+
+# confirming the distribution of people who crashed vs. didn't crash
+table(logit_data$TARGET_FLAG)
+```
+The output means we've got 5672 people who didn’t crash and 2039 who did, so the classes are a bit imbalanced (about 22% had crashes). It's not too bad, but something to keep in mind later.
+
+
+### Logisitic Regresion Model
+Now that we have the distribution, we build a logistic regression model to predict the chance someone gets into a car crash (TARGET_FLAG). We included variables like age, income, driving history, and education, variables that might reasonably relate to risk. 
+
+```{r}
+logit_model <- glm(
+  TARGET_FLAG ~ AGE + INCOME + MSTATUS + SEX + CAR_USE + EDUCATION + RED_CAR + CLM_FREQ + MVR_PTS,
+  data = logit_data,
+  family = binomial
+)
+
+summary(logit_model)
+```
+- AGE and INCOME are both negatively related to crash risk — makes sense, older and higher-income people might drive more cautiously.
+- Being married (MSTATUSYes), using a car privately, and being male all lower the odds of a crash in this model.
+- Education matters — people with a Bachelors or Masters show lower crash risk than those with less education.
+- Claim frequency (CLM_FREQ.L) has a significant positive effect — not surprising, people who’ve filed more claims are more likely to have another.
+- RED_CAR isn’t significant — which kind of proves the myth of red cars are more prone to accidents.
+- MVR_PTS came in with a lot of noise and no clear pattern — possibly too granular or sparse when treated as ordered.
+
+### Logisitic Regresion Model Evaluation
+
+Now used the model to predict crashes (TARGET_FLAG) and compared it to the actual results. 
+```{r}
+# get predicted probabilities
+logit_preds <- predict(logit_model, type = "response")
+
+# convert to 0/1 predictions using 0.5 threshold
+logit_class <- ifelse(logit_preds > 0.5, 1, 0)
+
+# the confusion matrix
+table(Predicted = logit_class, Actual = logit_data$TARGET_FLAG)
+
+# accuracy
+mean(logit_class == logit_data$TARGET_FLAG)
+```
+- 5373 people correctly predicted not to crash (true negatives)
+- 464 correctly predicted to crash (true positives)
+- 1575 false negatives — people who did crash, but we predicted they wouldn’t
+- 299 false positives — predicted to crash, but they didn’t
+
+There's lots of false negatives. Even though 75.7% accuracy is considered good, it's a bit misleading because most people don't crash. The model is better at predicting non-crashes than actual crashes. 
+
+We will do ROC curve & AUC to further confirm the accuracy of the model.
+
+### ROC curve & AUC
+
+```{r}
+library(pROC)
+
+roc_obj <- roc(logit_data$TARGET_FLAG, logit_preds)
+plot(roc_obj, main = "ROC Curve")
+auc(roc_obj)
+```
+The AUC (Area Under the Curve) tells us how well the model separates crashers from non-crashers. 
+0.73 means our model is doing a decent job. It’s better than random guessing (which would be 0.5), and it shows that the model is capturing useful patterns in the data.
+
+The `step` function selects a model by different criteria in a stepwise algorithm and helps refining our logistic regression model - and here's what happened:
+```{r}
+step_model <- step(logit_model, direction = "both")
+summary(step_model)
+
+```
+We used stepwise selection to simplify the model by removing unnecessary variables. It removed the least useful variable (RED_CAR). Dropping it slightly improved the model's AIC (from 7910.1 to 7908.6). 
+
+The final model dropped RED_CAR, as it had little predictive value and didn’t improve model performance. The updated model includes key predictors like age, income, marital status, car use, education, claim frequency, and motor vehicle record points. The AIC dropped slightly, indicating a better balance between complexity and fit.
+
+### Filter Data to Only Include People Who Crashed
+
+Since TARGET_AMT is only meaningful when someone actually had a crash (i.e., TARGET_FLAG == 1), we’ll model on just those rows

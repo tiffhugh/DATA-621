@@ -336,16 +336,14 @@ auc(roc_obj)
 The AUC (Area Under the Curve) tells us how well the model separates crashers from non-crashers. 
 0.73 means our model is doing a decent job. It’s better than random guessing (which would be 0.5), and it shows that the model is capturing useful patterns in the data.
 
-The `step` function selects a model by different criteria in a stepwise algorithm and helps refining our logistic regression model - and here's what happened:
+Based on our outputs, the model still shows a high number of false negatives (1575) and a moderate number of false positives (299). It’s better at predicting non-crashes (true negatives) than actual crashes (true positives). While the overall accuracy (75.7%) looks decent, it's misleading due to class imbalance. And let’s not forget we’re working for an insurance company, where catching crashes is critical.
+
+Let's lower the classifcation treshhold from 0.5 to 0.3. Lowering the threshold could help reduce false negatives by making the model more sensitive to predicting crashes.
+
 ```{r}
-step_model <- step(logit_model, direction = "both")
-summary(step_model)
-
+logit_class <- ifelse(logit_preds > 0.3, 1, 0)
+table(Predicted = logit_class, Actual = logit_data$TARGET_FLAG)
+mean(logit_class == logit_data$TARGET_FLAG)
 ```
-We used stepwise selection to simplify the model by removing unnecessary variables. It removed the least useful variable (RED_CAR). Dropping it slightly improved the model's AIC (from 7910.1 to 7908.6). 
+By lowering the classification threshold to 0.3, the model has become more sensitive to predicting crashes, significantly reducing false negatives (missed crashes) at the cost of increasing false positives. This trade-off aligns with our goal as an insurance company to prioritize identifying potential crash risks, ensuring better financial protection and risk management.
 
-The final model dropped RED_CAR, as it had little predictive value and didn’t improve model performance. The updated model includes key predictors like age, income, marital status, car use, education, claim frequency, and motor vehicle record points. The AIC dropped slightly, indicating a better balance between complexity and fit.
-
-### Filter Data to Only Include People Who Crashed
-
-Since TARGET_AMT is only meaningful when someone actually had a crash (i.e., TARGET_FLAG == 1), we’ll model on just those rows

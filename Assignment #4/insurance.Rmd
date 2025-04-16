@@ -43,6 +43,7 @@ library(caret)
 library(DHARMa)
 library(lares)
 library(mice)
+library(glmnet)
 ```
 
 ```{r, include=FALSE}
@@ -66,7 +67,7 @@ insurance_evaluation_data <- insurance_evaluation_data %>% select(-INDEX)
 Our insurance training dataset has 8,161 observations and 25 columns. As we can see, there are a lot of data transformations that needs to be done with our variables, like cleaning our values and changing the columns into categorical or numerical.
 
 ### Data Transformation of Variables
-First, let's clean our values by removing unecessary characters such as 'z_', '$', ',', and '-'.
+First, let's clean our values by removing unnecessary characters such as 'z_', '$', ',', and '-'.
 ```{r, echo=FALSE}
 # clean the values in our variables by removing 'z_', '$', and ','
 insurance_training_data <- insurance_training_data %>% 
@@ -135,12 +136,27 @@ insurance_evaluation_data <- insurance_evaluation_data %>%
 ### Summary of Datasets
 Here we see 'NA' values with `AGE`, `YOJ`, `INCOME`, `HOME_VAL`, and `CAR_AGE`. Later we'll impute each of these missing values.
 
-```{r, echo=FALSE}
-#| fig-height: 3
-#| fig-width: 8
-cat("Summary of training data: \n")
-summary(insurance_training_data)
+```{r}
+# Create comprehensive summary statistics table
+summary_stats <- insurance_training_data %>%
+  select(where(is.numeric)) %>%
+  pivot_longer(everything(), names_to = "Variable") %>%
+  group_by(Variable) %>%
+  summarise(
+    Mean = mean(value, na.rm = TRUE),
+    SD = sd(value, na.rm = TRUE),
+    Median = median(value, na.rm = TRUE),
+    Min = min(value, na.rm = TRUE),
+    Max = max(value, na.rm = TRUE),
+    NAs = sum(is.na(value)),
+    .groups = 'drop'
+  ) %>%
+  mutate(across(where(is.numeric), ~round(., 2)))
+
+# Display as formatted table
+knitr::kable(summary_stats, caption = "Summary Statistics of Numeric Variables")
 ```
+
 ### Histogram of Continuous Variables
 ```{r, echo=FALSE}
 #| fig-height: 5
@@ -346,4 +362,37 @@ table(Predicted = logit_class, Actual = logit_data$TARGET_FLAG)
 mean(logit_class == logit_data$TARGET_FLAG)
 ```
 By lowering the classification threshold to 0.3, the model has become more sensitive to predicting crashes, significantly reducing false negatives (missed crashes) at the cost of increasing false positives. This trade-off aligns with our goal as an insurance company to prioritize identifying potential crash risks, ensuring better financial protection and risk management.
+
+### Stepwise Selected Logisitic Regresion Model
+
+To compare the results from the manually selected logistic regression model, we will perform a stepwise selected logistic regression model.
+
+```{r}
+# Prepare the full model formula (excluding INDEX and TARGET_AMT)
+full_formula <- as.formula(
+  paste("TARGET_FLAG ~", 
+        paste(names(clean_insurance_training_data)[!names(clean_insurance_training_data) %in% 
+                                                    c("INDEX", "TARGET_AMT")], 
+              collapse = " + "))
+)
+
+# Create null model (intercept only)
+null_model <- glm(TARGET_FLAG ~ 1, 
+                 family = binomial, 
+                 data = clean_insurance_training_data)
+
+# Perform stepwise selection (both directions)
+set.seed(1225) # For reproducibility
+stepwise_model <- step(null_model,
+                      scope = list(lower = ~1, 
+                                  upper = full_formula),
+                      direction = "both",
+                      trace = 1,  # Show steps in console
+                      k = log(nrow(clean_insurance_training_data))) # BIC penalty
+
+# View final model summary
+summary(stepwise_model)
+```
+
+
 

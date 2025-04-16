@@ -383,9 +383,9 @@ mean(logit_class == balanced_data$TARGET_FLAG)
 
 After undersampling, the model's accuracy dropped from 75.7% to 66.7%, but it correctly identified far more actual crashes (1,423 vs. 485 true positives). If our goal is to improve crash detection — which is important in an insurance setting — the undersampled model is the better choice, especially since we're keeping the prediction threshold fixed at 0.5.
 
-### Stepwise Selected Logisitic Regresion Model
+### Stepwise Selected Logistic Regression Model
 
-To compare the results from the manually selected logistic regression model, we will perform a stepwise selected logistic regression model.
+We will perform a stepwise selected logistic regression model to compare the results with the chosen manual logistic regression model.
 
 ```{r}
 # Prepare the full model formula (excluding INDEX and TARGET_AMT)

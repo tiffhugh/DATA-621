@@ -326,25 +326,25 @@ logit_preds <- predict(logit_model, type = "response")
 logit_class <- ifelse(logit_preds > 0.5, 1, 0)
 
 # the confusion matrix
-table(Predicted = logit_class, Actual = logit_data$TARGET_FLAG)
+table(Predicted = logit_class, Actual = clean_insurance_training_data$TARGET_FLAG)
 
 # accuracy
-mean(logit_class == logit_data$TARGET_FLAG)
+mean(logit_class == clean_insurance_training_data$TARGET_FLAG)
 ```
-- 5380 people correctly predicted not to crash (true negatives)
-- 460 correctly predicted to crash (true positives)
-- 1579 false negatives — people who did crash, but we predicted they wouldn’t
-- 292 false positives — predicted to crash, but they didn’t
+- 5699 people correctly predicted not to crash (true negatives)
+- 485 correctly predicted to crash (true positives)
+- 1668 false negatives — people who did crash, but we predicted they wouldn’t
+- 309 false positives — predicted to crash, but they didn’t
 
-The model achieves 75.7% accuracy, which is solid, especially considering the class imbalance. Since crashes only occur in about 22% of cases, the model is naturally skewed toward predicting non-crashes, which isn’t necessarily a problem in this context.
+The model achieves 75.7% accuracy, which is solid, especially considering the class imbalance. Since crashes only occur in about 22% of cases, the model is naturally skewed toward predicting non-crashes, which isn’t necessarily a problem in the context of an insurance company.
 
 Still, to explore if we can improve the model’s sensitivity to actual crashes, we’ll try undersampling the majority class and see how it impacts performance.
 ```{r}
 library(dplyr)
 
 # Separate majority and minority classes
-majority <- logit_data %>% filter(TARGET_FLAG == 0)
-minority <- logit_data %>% filter(TARGET_FLAG == 1)
+majority <- clean_insurance_training_data %>% filter(TARGET_FLAG == 0)
+minority <- clean_insurance_training_data %>% filter(TARGET_FLAG == 1)
 
 # Randomly sample from the majority class
 set.seed(123)
@@ -369,32 +369,19 @@ logit_model <- glm(
 summary(logit_model)
 
 # get predicted probabilities
-logit_preds <- predict(logit_model, newdata = logit_data, type = "response")
+logit_preds <- predict(logit_model, newdata = balanced_data, type = "response")
 
 # convert to 0/1 predictions using 0.5 threshold
 logit_class <- ifelse(logit_preds > 0.5, 1, 0)
 
 # the confusion matrix
-table(Predicted = logit_class, Actual = logit_data$TARGET_FLAG)
+table(Predicted = logit_class, Actual = balanced_data$TARGET_FLAG)
 
 # accuracy
-mean(logit_class == logit_data$TARGET_FLAG)
+mean(logit_class == balanced_data$TARGET_FLAG)
 ```
-After undersampling, the model's accuracy dropped from 75.7% to 67.5%, but it correctly identified far more actual crashes (1,333 vs. 460 true positives). If our goal is to improve crash detection — which is important in an insurance setting — the undersampled model is the better choice, especially since we're keeping the prediction threshold fixed at 0.5.
 
-We will do ROC curve & AUC to further confirm the accuracy of the model.
-
-### ROC curve & AUC
-
-```{r}
-library(pROC)
-
-roc_obj <- roc(logit_data$TARGET_FLAG, logit_preds)
-plot(roc_obj, main = "ROC Curve")
-auc(roc_obj)
-```
-The AUC (Area Under the Curve) tells us how well the model separates crashers from non-crashers. 
-0.73 means our model is doing a decent job. It’s better than random guessing (which would be 0.5), and it shows that the model is capturing useful patterns in the data.
+After undersampling, the model's accuracy dropped from 75.7% to 66.7%, but it correctly identified far more actual crashes (1,423 vs. 485 true positives). If our goal is to improve crash detection — which is important in an insurance setting — the undersampled model is the better choice, especially since we're keeping the prediction threshold fixed at 0.5.
 
 ### Stepwise Selected Logisitic Regresion Model
 

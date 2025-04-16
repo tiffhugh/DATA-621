@@ -302,7 +302,7 @@ Now that we have the distribution, we build a logistic regression model to predi
 ```{r}
 logit_model <- glm(
   TARGET_FLAG ~ AGE + INCOME + MSTATUS + SEX + CAR_USE + EDUCATION + RED_CAR + CLM_FREQ + MVR_PTS,
-  data = logit_data,
+  data = clean_insurance_training_data,
   family = binomial
 )
 
@@ -310,9 +310,9 @@ summary(logit_model)
 ```
 - AGE and INCOME are both negatively related to crash risk — makes sense, older and higher-income people might drive more cautiously.
 - Being married (MSTATUSYes), using a car privately, and being male all lower the odds of a crash in this model.
-- Education matters — people with a Bachelors or Masters show lower crash risk than those with less education.
+- Education matters — people with a Bachelors, Masters, or PhD show lower crash risk than those with less education, though High School level wasn’t significant.
 - Claim frequency (CLM_FREQ.L) has a significant positive effect — not surprising, people who’ve filed more claims are more likely to have another.
-- RED_CAR isn’t significant — which kind of proves the myth of red cars are more prone to accidents.
+- RED_CAR isn’t significant — which kind of proves the myth of red cars being more prone to accidents.
 - MVR_PTS came in with a lot of noise and no clear pattern — possibly too granular or sparse when treated as ordered.
 
 ### Logisitic Regresion Model Evaluation
@@ -331,12 +331,56 @@ table(Predicted = logit_class, Actual = logit_data$TARGET_FLAG)
 # accuracy
 mean(logit_class == logit_data$TARGET_FLAG)
 ```
-- 5373 people correctly predicted not to crash (true negatives)
-- 464 correctly predicted to crash (true positives)
-- 1575 false negatives — people who did crash, but we predicted they wouldn’t
-- 299 false positives — predicted to crash, but they didn’t
+- 5380 people correctly predicted not to crash (true negatives)
+- 460 correctly predicted to crash (true positives)
+- 1579 false negatives — people who did crash, but we predicted they wouldn’t
+- 292 false positives — predicted to crash, but they didn’t
 
-There's lots of false negatives. Even though 75.7% accuracy is considered good, it's a bit misleading because most people don't crash. The model is better at predicting non-crashes than actual crashes. 
+The model achieves 75.7% accuracy, which is solid, especially considering the class imbalance. Since crashes only occur in about 22% of cases, the model is naturally skewed toward predicting non-crashes, which isn’t necessarily a problem in this context.
+
+Still, to explore if we can improve the model’s sensitivity to actual crashes, we’ll try undersampling the majority class and see how it impacts performance.
+```{r}
+library(dplyr)
+
+# Separate majority and minority classes
+majority <- logit_data %>% filter(TARGET_FLAG == 0)
+minority <- logit_data %>% filter(TARGET_FLAG == 1)
+
+# Randomly sample from the majority class
+set.seed(123)
+majority_sample <- majority %>% sample_n(nrow(minority))
+
+# Combine the balanced dataset
+balanced_data <- bind_rows(majority_sample, minority)
+
+# Check the distribution of the target variable
+table(balanced_data$TARGET_FLAG)
+```
+
+Now that we extracted a random balanced sample from our dataset, let's measure the accuracy:
+```{r}
+logit_model <- glm(
+  TARGET_FLAG ~ AGE + INCOME + MSTATUS + SEX + CAR_USE + EDUCATION + RED_CAR + CLM_FREQ + MVR_PTS +
+    AGE:INCOME + MSTATUS:CAR_USE,
+  data = balanced_data,
+  family = binomial
+)
+
+summary(logit_model)
+
+# get predicted probabilities
+logit_preds <- predict(logit_model, newdata = logit_data, type = "response")
+
+# convert to 0/1 predictions using 0.5 threshold
+logit_class <- ifelse(logit_preds > 0.5, 1, 0)
+
+# the confusion matrix
+table(Predicted = logit_class, Actual = logit_data$TARGET_FLAG)
+
+# accuracy
+mean(logit_class == logit_data$TARGET_FLAG)
+```
+After undersampling, the model's accuracy dropped from 75.7% to 67.5%, but it correctly identified far more actual crashes (1,333 vs. 460 true positives). If our goal is to improve crash detection — which is important in an insurance setting — the undersampled model is the better choice, especially since we're keeping the prediction threshold fixed at 0.5.
 
 We will do ROC curve & AUC to further confirm the accuracy of the model.
 
@@ -351,17 +395,6 @@ auc(roc_obj)
 ```
 The AUC (Area Under the Curve) tells us how well the model separates crashers from non-crashers. 
 0.73 means our model is doing a decent job. It’s better than random guessing (which would be 0.5), and it shows that the model is capturing useful patterns in the data.
-
-Based on our outputs, the model still shows a high number of false negatives (1575) and a moderate number of false positives (299). It’s better at predicting non-crashes (true negatives) than actual crashes (true positives). While the overall accuracy (75.7%) looks decent, it's misleading due to class imbalance. And let’s not forget we’re working for an insurance company, where catching crashes is critical.
-
-Let's lower the classifcation treshhold from 0.5 to 0.3. Lowering the threshold could help reduce false negatives by making the model more sensitive to predicting crashes.
-
-```{r}
-logit_class <- ifelse(logit_preds > 0.3, 1, 0)
-table(Predicted = logit_class, Actual = logit_data$TARGET_FLAG)
-mean(logit_class == logit_data$TARGET_FLAG)
-```
-By lowering the classification threshold to 0.3, the model has become more sensitive to predicting crashes, significantly reducing false negatives (missed crashes) at the cost of increasing false positives. This trade-off aligns with our goal as an insurance company to prioritize identifying potential crash risks, ensuring better financial protection and risk management.
 
 ### Stepwise Selected Logisitic Regresion Model
 

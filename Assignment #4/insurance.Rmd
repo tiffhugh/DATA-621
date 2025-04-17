@@ -414,5 +414,10 @@ stepwise_model <- step(null_model,
 summary(stepwise_model)
 ```
 
+```{r}
+# Extract selected variables
+selected_vars <- names(coef(stepwise_model))[-1] # Exclude intercept
+cat("Selected variables by stepwise:\n", paste(selected_vars, collapse = ", "))
+```
 
 

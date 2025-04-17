@@ -420,4 +420,115 @@ selected_vars <- names(coef(stepwise_model))[-1] # Exclude intercept
 cat("Selected variables by stepwise:\n", paste(selected_vars, collapse = ", "))
 ```
 
+## Crash Amount 
 
+Now that we've determined which variables predict car crashes. We still need to
+predict how much a crash costs, so the data will be subset to only include people who crashed.
+
+```{r}
+# subset include people who had a crash
+crash_training_data <- clean_insurance_training_data %>%
+  filter(TARGET_FLAG == 1)
+```
+
+Earlier we identified age, income, Blue Book value, car age, claim frequency, and
+motor vehicle record points are key predictors of car crashes. These variables also 
+valuable insight into crash costs—for instance, wealthier individuals or those driving 
+newer vehicles may file higher-value claims. Younger or less experienced drivers often
+face higher insurance premiums and may be involved in more accidents than seasoned 
+drivers. Additionally, a high frequency of claims or traffic violations can signal 
+a greater risk of severe accidents. To analyze these relationships, a linear 
+regression model will be developed.
+
+```{r}
+# MLR (manually chosen predictors)
+mlr_model_1 <- lm(
+  TARGET_AMT ~ AGE + INCOME + BLUEBOOK + CAR_AGE + CLM_FREQ + MVR_PTS,
+  data = crash_training_data
+)
+summary(mlr_model_1)
+```
+- Bluebook was the only statistically significant predictor (p < 0.001), with a positive coefficient (0.1108), suggesting that higher-value vehicles tend to result in larger claim payouts.
+- Age, income, car age, claim frequency, and MVR points were not statistically significant in predicting claim amounts, as their p-values exceeded 0.05.
+- Residual standard error was approximately 7700, indicating considerable variability in claim amounts not explained by the model. In addition, R-squared is 0.0208, meaning only ~2% of the variance in claim amounts is explained by these predictors.
+
+Even though the multiple linear regression only had one statically significant variable, 
+stepwise regression will be done that could uncover combinations of variables that improve overall
+model performance — even if individual variables aren’t significant in isolation.
+
+```{r}
+full_formula_lm <- as.formula(
+  paste("TARGET_AMT ~", 
+        paste(setdiff(names(crash_training_data), c("INDEX", "TARGET_FLAG")), collapse = " + "))
+)
+
+# null model 
+null_lm <- lm(TARGET_AMT ~ 1, data = crash_training_data)
+
+# stepwise regression (both directions)
+stepwise_lm <- step(
+  null_lm,
+  scope = list(lower = ~1, upper = full_formula_lm),
+  direction = "both",
+  trace = 1
+)
+
+summary(stepwise_lm)
+```
+
+- Bluebook was again the only strongly significant predictor of crash cost. For every
+$ 1 increase in vehicle value, the predicted claim increases by $0.11, which is 
+reasonable since more expensive cars tend to result in more expensive claims.
+
+- Based on gender, male drivers, on average, have $637 higher claims than female
+drivers. The p-value is marginally significant, which could reflect riskier driving
+behavior or differences in vehicle ownership between genders.
+
+- Surprisingly, drivers with revoked licenses have $703 lower claim amounts.
+This marginally significant result may be because these individuals tend to own
+less expensive cars or file smaller claims on average.
+
+- Married individuals tend to have $548 lower claims compared to non-married drivers. 
+marginally significant result could be explained by differences in insurance coverage
+plans or more cautious driving habits among married people.
+
+- For every additional year of car age, the predicted claim amount decreases by $46. 
+While this finding is not statistically significant, it aligns with the idea that older
+vehicles are less expensive to repair or replace.
+
+Overall, the model explains only 1.7% of the variance in claim amounts. This low adjusted R² suggests 
+that important factors influencing crash cost are not captured.
+
+# Comparison of Models
+```{r}
+# MLR
+summary(mlr_model_1)
+sqrt(mean(residuals(mlr_model_1)^2))  # RMSE
+
+# Stepwise 
+summary(stepwise_lm)
+sqrt(mean(residuals(stepwise_lm)^2))  # RMSE
+
+# check linearity, homoscedasticity, outliers
+par(mfrow = c(2, 2))
+plot(mlr_model_1)
+```
+We built two multiple linear regression models to predict the cost of a crash, 
+using only individuals who were involved in a crash.
+
+The first model was built manually based on assumption and crash predictors, 
+including demographic and behavioral variables like AGE, INCOME, CLM_FREQ, and
+MVR_PTS. However, only Bluebook (vehicle value) emerged as statistically significant.
+The model had an adjusted R² of 0.011 and an RMSE of 7660, suggesting a poor fit
+with high variability.
+
+The second model was generated using stepwise selection, and retained just five 
+predictors: BLUEBOOK, SEX, REVOKED, MSTATUS, and CAR_AGE. This model had a slightly
+better adjusted R² of 0.017 and a comparable RMSE of 7667. While most predictors
+were only marginally significant, the overall model was statistically stronger 
+(F-statistic = 8.396, p < 0.0001) and easier to interpret.
+
+The stepwise model should be selected due to its stronger overall performance and
+simpler structure. Despite the modest predictive power, it highlights that Bluebook
+is the most influential factor in estimating claim cost, and that other key drivers 
+of claim value may not be captured in this dataset.

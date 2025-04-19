@@ -248,7 +248,9 @@ insurance_evaluation_data <- insurance_evaluation_data %>%
 For the variables `AGE`, `YOJ`, `INCOME`, and `CAR_AGE`, we will use Predictive Mean Matching (PMM) imputation from the 'mice' package. PMM is a general imputation method that ensures missing values are replaced with observed values, helping to maintain the original relationships in the data, including non-linear ones. We will set the number of imputations (m) to 5, as the dataset is large and this is a standard choice. The default maximum number of iterations (maxit) will remain at 5.
 
 We selected the fifth iteration of AGE to fill in the missing values, as it seems reasonable that the imputed values are near the mean. Additionally, as shown below, the histogram retains its original shape even after the missing values were imputed.
-```{r, echo=FALSE}
+```{r, echo=FALSE, message=FALSE}
+#| fig-height: 5
+#| fig-width: 10
 # mice imputation
 input_training = insurance_training_data
 method_vector_train <- c("", "", "", "pmm", "",
@@ -277,6 +279,41 @@ mice_imp_eval = mice(input_evaluation, m = 5,
                 method = method_vector_eval)
 clean_insurance_evaluation_data <- complete(mice_imp_eval, 4)
 ```
+# **Build Models**
+
+### Random Forest (Binary Logistic Regression Model 1)
+We'll try to build a model using the 'randomForest' package. See what predictive variables are the the most important and take the top 10 of those variables to build a model. We can see below that the distribution of people who crashed vs. who didn't crash is not balanced and this is something that we'll take note off.
+```{r, echo=FALSE, message=FALSE}
+# confirming the distribution of people who crashed vs. didn't crash
+cat("Distribution of People Who Didn't Crash vs. Crashed: \n")
+table(clean_insurance_training_data$TARGET_FLAG)
+```
+
+```{r, echo=FALSE, message=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+library(randomForest)
+rf_model <- randomForest(TARGET_FLAG ~ ., data = clean_insurance_training_data[, !names(clean_insurance_training_data) %in% "TARGET_AMT"], importance = TRUE)
+importance(rf_model)  # Numeric importance
+varImpPlot(rf_model)  # Visual plot
+```
+Here, we'll use the `MeanDecreaseAccuracy` to choose our predictive variables so not to introduce bias in our model, since we know that the distribution of people who crashed and not are not balanced, let's ignore the other columns like 0/1 and `MeanDecreaseGini`. And to help visualize the top 10 variables, we created a plot.
+
+```{r, echo=FALSE}
+rf_model <- glm(TARGET_FLAG ~ URBANICITY + JOB + MVR_PTS + INCOME + OLDCLAIM +
+                    REVOKED + CAR_USE + AGE + CAR_TYPE + KIDSDRIV, 
+                data = clean_insurance_training_data, family = binomial)
+summary(rf_model)
+
+# plot residual vs. predicted plot
+sr1 <- simulateResiduals(rf_model)
+plot(sr1)
+
+# get the log likelihood for comparison with other models
+ll_model1 <- logLik(rf_model)
+ll_model1
+```
+As we can see from the model output, MVR_PTS (motor vehicle record points) does not significantly contribute to predicting whether a person was in a car crash, as none of its polynomial terms have p-values less than 0.05. One of the strongest predictors is `URBANICITY`, indicating that individuals living in urban or city areas are significantly more likely to be involved in a car crash. Similarly, `CAR_TYPE` plays an important role — drivers of sports cars, SUVs, vans, panel trucks, and pickups are all more likely to get into accidents compared to those driving the baseline vehicle type. Another important factor is the presence of teenage drivers in the household (`KIDSDRIV`); having one to three kids who drive is associated with a higher likelihood of being in a crash. A revoked license (`REVOKED`) also significantly increases crash risk. On the other hand, private car use (CAR_USEPrivate) is associated with a lower risk of accidents, suggesting that commercial vehicle use is riskier. Additionally, income and age both show negative relationships with accident likelihood, meaning that higher income and older age are associated with a reduced chance of being in a crash. Certain occupations — such as doctors, lawyers, professionals, and managers — also appear to be linked to a lower probability of accidents, likely compared to a baseline category like students or clerical workers. Overall, the model highlights a mix of behavioral, demographic, and socioeconomic factors that contribute to accident risk.
 
 ### TARGET_FLAG Distribution
 

@@ -422,7 +422,7 @@ After undersampling, the model's accuracy dropped from 75.7% to 66.7%, but it co
 
 ### Stepwise Selected Logistic Regression Model
 
-We will perform a stepwise selected logistic regression model to compare the results with the chosen manual logistic regression model.
+In insurance risk assessment, predicting crash probability is critical for determining premiums and identifying high-risk factors. Stepwise regression is a statistical method that iteratively selects the most significant predictors (e.g., driver age, vehicle type, driving history) by evaluating criteria such as p-values or Akaike Information Criterion (AIC). This approach strikes a balance between model simplicity and predictive accuracy, ensuring that only variables with a substantial impact on crash likelihood are included. We will perform a stepwise selected logistic regression model to compare the results with the chosen manual logistic regression model for crash probability.
 
 ```{r}
 # Prepare the full model formula (excluding INDEX and TARGET_AMT)
@@ -456,6 +456,21 @@ summary(stepwise_model)
 selected_vars <- names(coef(stepwise_model))[-1] # Exclude intercept
 cat("Selected variables by stepwise:\n", paste(selected_vars, collapse = ", "))
 ```
+
+**Analysis:**
+Stepwise logistic regression (bidirectional elimination, a = 0.05) was performed to predict crash probability (TARGET_FLAG). The final model retained 15 predictors, including URBANICITY, JOB, MSTATUS, and REVOKED. Variables were added iteratively, with AIC decreasing from 9427 (null model) to 7421 (final model), indicating improved fit.
+ 
+**Key Predictors:**
+- URBANICITY (b = 2.36, p < 0.001): Urban drivers had 2.4x higher crash risk than rural counterparts.
+- REVOKED License (b = 0.96, p < 0.001): Drivers with revoked licenses showed 95% higher crash likelihood.
+- CAR_TYPE: Sports cars (b = 0.98, p < 0.001) and SUVs (b = 0.71, p < 0.001) had elevated risk vs sedans.
+- INCOME (b = -6.03e-06, p < 0.001): Higher income correlated with reduced crash probability.
+- MSTATUS (b = -0.42, p < 0.001): Married drivers had 34% lower risk.
+
+**Model Performance:**
+- AIC: Reduced by 27% (9427 to 7421), confirming parsimony.
+- Deviance: Residual deviance = 7351.2 (vs null deviance = 9418.0), explaining ~22% variance.
+- Significant Interactions: KIDSDRIV (b = 0.58–1.54, p < 0.001) and TRAVTIME (b = 0.014, p < 0.001) increased risk.
 
 ## Crash Amount 
 

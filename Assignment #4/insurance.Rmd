@@ -279,6 +279,42 @@ mice_imp_eval = mice(input_evaluation, m = 5,
                 method = method_vector_eval)
 clean_insurance_evaluation_data <- complete(mice_imp_eval, 4)
 ```
+### Transforming MVR_PTS
+We grouped MVR_PTS values of 10 or more into a single category ("10+") for two key reasons. First, such high point values are rare in reality — as reflected in the summary table below — and combining them helps simplify the model without sacrificing interpretability. Second, this transformation ensures consistency between the training and evaluation datasets, preventing prediction errors caused by unseen factor levels (ex. "12" in the evaluation set that wasn’t present in training).
+```{r, echo=FALSE}
+# For training data
+cat("Distribution of MVR_PTS in training data: \n")
+clean_insurance_training_data %>%
+  group_by(MVR_PTS) %>%
+  summarise(count = n()) %>%
+  arrange(as.numeric(as.character(MVR_PTS)))
+
+# For evaluation data
+cat("Distribution of MVR_PTS in evaluation data: \n")
+clean_insurance_evaluation_data %>%
+  group_by(MVR_PTS) %>%
+  summarise(count = n()) %>%
+  arrange(as.numeric(as.character(MVR_PTS)))
+
+```
+```{r, echo=FALSE, message=FALSE}
+# Recode MVR_PTS as character to manipulate
+clean_insurance_training_data$MVR_PTS <- as.character(clean_insurance_training_data$MVR_PTS)
+clean_insurance_evaluation_data$MVR_PTS <- as.character(clean_insurance_evaluation_data$MVR_PTS)
+
+# Create "10+" bucket
+clean_insurance_training_data$MVR_PTS[as.numeric(clean_insurance_training_data$MVR_PTS) >= 10] <- "10+"
+clean_insurance_evaluation_data$MVR_PTS[as.numeric(clean_insurance_evaluation_data$MVR_PTS) >= 10] <- "10+"
+
+# Convert back to factor with consistent levels
+combined_levels <- unique(c(clean_insurance_training_data$MVR_PTS,
+                            clean_insurance_evaluation_data$MVR_PTS))
+clean_insurance_training_data$MVR_PTS <- factor(clean_insurance_training_data$MVR_PTS,
+                                                 levels = combined_levels)
+clean_insurance_evaluation_data$MVR_PTS <- factor(clean_insurance_evaluation_data$MVR_PTS,
+                                                  levels = combined_levels)
+```
+
 # **Build Models**
 
 ### Random Forest (Binary Logistic Regression Model 1)
@@ -406,11 +442,11 @@ Stepwise logistic regression (bidirectional elimination, a = 0.05) was performed
 **What criteria did we use to select our binary logistic model:**
 When selecting our binary logistic model, we focused on two main criteria: avoiding redundancy among variables and ensuring the model would be straightforward to interpret and communicate, especially to a non-technical audience.
 
-Among the three models we evaluated, Model 3 included 15 variables and had the strongest performance metrics: **AIC = 7418.2**, **log-likelihood = -3674.088**, **ROC = 0.81**, **accuracy = 78.78%**, **AUC = 0.8109**, and **F1 score = 0.8647**. However, we identified redundancy in some predictors—for example, both `CLM_FREQ` and `OLDCLAIM` reflect claim history within the past five years, which may introduce multicollinearity without adding meaningful information.
+Among the three models we evaluated, Model 3 included 15 variables and had the strongest performance metrics: **AIC = 7418.7**, **log-likelihood = -3674.347**, **ROC = 0.81**, **accuracy = 78.76%**, **AUC = 0.8109**, and **F1 score = 0.8647**. However, we identified redundancy in some predictors—for example, both `CLM_FREQ` and `OLDCLAIM` reflect claim history within the past five years, which may introduce multicollinearity without adding meaningful information.
 
-Model 1, which uses the Random Forest technique and includes 10 variables, performed slightly below Model 3 but still showed strong metrics: **AIC = 7762.1**, **log-likelihood = -3845.048**, **ROC = 0.79**, **accuracy = 77.36%**, **AUC = 0.7866**, and **F1 score = 0.8581**. Importantly, it includes most of the key predictors—such as `URBANICITY`, `JOB`, `INCOME`, `REVOKED`, `CAR_TYPE`, `AGE`, and `KIDSDRIV`—which keeps the model both interpretable and effective, without overcomplicating the explanation.
+Model 1, which uses the Random Forest technique and includes 10 variables, performed slightly below Model 3 but still showed strong metrics: **AIC = 7760.3**, **log-likelihood = -3846.128**, **ROC = 0.79**, **accuracy = 77.32%**, **AUC = 0.7865**, and **F1 score = 0.8581**. Importantly, it includes most of the key predictors—such as `URBANICITY`, `JOB`, `INCOME`, `REVOKED`, `CAR_TYPE`, `AGE`, and `KIDSDRIV`—which keeps the model both interpretable and effective, without overcomplicating the explanation.
 
-Model 2 performed the worst across all metrics: **AIC = 8371.4**, **log-likelihood = -4157.695**, **ROC = 0.73**, **accuracy = 75.71%**, **AUC = 0.7300**, and **F1 score = 0.8518**. While it was built with a focus on car crash risk variables, it appears to lack the predictive power needed to accurately identify true positives— individuals who were actually involved in a crash.
+Model 2 performed the worst across all metrics: **AIC = 8367.3**, **log-likelihood = -4157.663**, **ROC = 0.73**, **accuracy = 75.75%**, **AUC = 0.7299851**, and **F1 score = 0.8521**. While it was built with a focus on car crash risk variables, it appears to lack the predictive power needed to accurately identify true positives— individuals who were actually involved in a crash.
 
 Ultimately, we selected our final model by balancing statistical performance with interpretability, prioritizing models that retained key predictors without redundancy or unnecessary complexity.
 
@@ -700,3 +736,40 @@ The stepwise model should be selected due to its stronger overall performance an
 simpler structure. Despite the modest predictive power, it highlights that Bluebook
 is the most influential factor in estimating claim cost, and that other key drivers 
 of claim value may not be captured in this dataset.
+
+# **Predictions Using Evaluation Data Set**
+### Random Forest (Binary Logistic Regression Model 1)
+```{r, echo=FALSE}
+# Make predictions on the evaluation dataset
+prediction_prob_eval_model1 <- predict(rf_model, 
+                                       clean_insurance_evaluation_data, type="response")
+
+# Predict classes using the same threshold of 0.5
+prediction_class_eval_model1 <- ifelse(prediction_prob_eval_model1 > 
+                                         threshold, 1, 0)
+print(prediction_class_eval_model1)
+```
+
+### Manually Selected Binary Logisitic Regresion Model (Model 2)
+```{r, echo=FALSE}
+# Make predictions on the evaluation dataset
+prediction_prob_eval_model2 <- predict(logit_model, 
+                                       clean_insurance_evaluation_data, type="response")
+
+# Predict classes using the same threshold of 0.5
+prediction_class_eval_model2 <- ifelse(prediction_prob_eval_model2 > 
+                                         threshold, 1, 0)
+print(prediction_class_eval_model2)
+```
+
+### Stepwise Selected Logistic Regression Model (Model 3)
+```{r, echo=FALSE}
+# Make predictions on the evaluation dataset
+prediction_prob_eval_model3 <- predict(stepwise_model, 
+                                       clean_insurance_evaluation_data, type="response")
+
+# Predict classes using the same threshold of 0.5
+prediction_class_eval_model3 <- ifelse(prediction_prob_eval_model3 > 
+                                         threshold, 1, 0)
+print(prediction_class_eval_model3)
+```

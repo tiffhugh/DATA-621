@@ -315,28 +315,9 @@ ll_model1
 ```
 As we can see from the model output, MVR_PTS (motor vehicle record points) does not significantly contribute to predicting whether a person was in a car crash, as none of its polynomial terms have p-values less than 0.05. One of the strongest predictors is `URBANICITY`, indicating that individuals living in urban or city areas are significantly more likely to be involved in a car crash. Similarly, `CAR_TYPE` plays an important role — drivers of sports cars, SUVs, vans, panel trucks, and pickups are all more likely to get into accidents compared to those driving the baseline vehicle type. Another important factor is the presence of teenage drivers in the household (`KIDSDRIV`); having one to three kids who drive is associated with a higher likelihood of being in a crash. A revoked license (`REVOKED`) also significantly increases crash risk. On the other hand, private car use (CAR_USEPrivate) is associated with a lower risk of accidents, suggesting that commercial vehicle use is riskier. Additionally, income and age both show negative relationships with accident likelihood, meaning that higher income and older age are associated with a reduced chance of being in a crash. Certain occupations — such as doctors, lawyers, professionals, and managers — also appear to be linked to a lower probability of accidents, likely compared to a baseline category like students or clerical workers. Overall, the model highlights a mix of behavioral, demographic, and socioeconomic factors that contribute to accident risk.
 
-### TARGET_FLAG Distribution
-
-Now that the data is clean and imputed, we want to confirm the distribution of people who crashed vs. who didn't crash.
-
-```{r}
-# making sure TARGET_FLAG is numeric
-insurance_training_data$TARGET_FLAG <- as.numeric(as.character(insurance_training_data$TARGET_FLAG))
-
-# choosing relevant predictors
-logit_data <- insurance_training_data %>%
-  drop_na(AGE, INCOME, MSTATUS, SEX, CAR_USE, EDUCATION, RED_CAR, CLM_FREQ, MVR_PTS)
-
-# confirming the distribution of people who crashed vs. didn't crash
-table(logit_data$TARGET_FLAG)
-```
-The output means we've got 5672 people who didn’t crash and 2039 who did, so the classes are a bit imbalanced (about 22% had crashes). It's not too bad, but something to keep in mind later.
-
-
-### Logisitic Regresion Model
-Now that we have the distribution, we build a logistic regression model to predict the chance someone gets into a car crash (TARGET_FLAG). We included variables like age, income, driving history, and education, variables that might reasonably relate to risk. 
-
-```{r}
+### Manually Selected Binary Logisitic Regresion Model (Model 2)
+For our second model, we included variables like age, income, driving history, and education, variables that might reasonably relate to risk. 
+```{r, echo=FALSE}
 logit_model <- glm(
   TARGET_FLAG ~ AGE + INCOME + MSTATUS + SEX + CAR_USE + EDUCATION + RED_CAR + CLM_FREQ + MVR_PTS,
   data = clean_insurance_training_data,
@@ -344,6 +325,14 @@ logit_model <- glm(
 )
 
 summary(logit_model)
+
+# plot residual vs. predicted plot
+sr2 <- simulateResiduals(logit_model)
+plot(sr2)
+
+# get the log likelihood for comparison with other models
+ll_model2 <- logLik(logit_model)
+ll_model2
 ```
 - AGE and INCOME are both negatively related to crash risk — makes sense, older and higher-income people might drive more cautiously.
 - Being married (MSTATUSYes), using a car privately, and being male all lower the odds of a crash in this model.
@@ -352,79 +341,10 @@ summary(logit_model)
 - RED_CAR isn’t significant — which kind of proves the myth of red cars being more prone to accidents.
 - MVR_PTS came in with a lot of noise and no clear pattern — possibly too granular or sparse when treated as ordered.
 
-### Logisitic Regresion Model Evaluation
+### Stepwise Selected Logistic Regression Model (Model 3)
+In insurance risk assessment, predicting crash probability is critical for determining premiums and identifying high-risk factors. Stepwise regression is a statistical method that interactively selects the most significant predictors (e.g., driver age, vehicle type, driving history) by evaluating criteria such as p-values or Akaike Information Criterion (AIC). This approach strikes a balance between model simplicity and predictive accuracy, ensuring that only variables with a substantial impact on crash likelihood are included. We will perform a stepwise selected logistic regression model to compare the results with the chosen manual logistic regression model for crash probability.
 
-Now used the model to predict crashes (TARGET_FLAG) and compared it to the actual results. 
-```{r}
-# get predicted probabilities
-logit_preds <- predict(logit_model, type = "response")
-
-# convert to 0/1 predictions using 0.5 threshold
-logit_class <- ifelse(logit_preds > 0.5, 1, 0)
-
-# the confusion matrix
-table(Predicted = logit_class, Actual = clean_insurance_training_data$TARGET_FLAG)
-
-# accuracy
-mean(logit_class == clean_insurance_training_data$TARGET_FLAG)
-```
-- 5699 people correctly predicted not to crash (true negatives)
-- 485 correctly predicted to crash (true positives)
-- 1668 false negatives — people who did crash, but we predicted they wouldn’t
-- 309 false positives — predicted to crash, but they didn’t
-
-The model achieves 75.7% accuracy, which is solid, especially considering the class imbalance. Since crashes only occur in about 22% of cases, the model is naturally skewed toward predicting non-crashes, which isn’t necessarily a problem in the context of an insurance company.
-
-Still, to explore if we can improve the model’s sensitivity to actual crashes, we’ll try undersampling the majority class and see how it impacts performance.
-```{r}
-library(dplyr)
-
-# Separate majority and minority classes
-majority <- clean_insurance_training_data %>% filter(TARGET_FLAG == 0)
-minority <- clean_insurance_training_data %>% filter(TARGET_FLAG == 1)
-
-# Randomly sample from the majority class
-set.seed(123)
-majority_sample <- majority %>% sample_n(nrow(minority))
-
-# Combine the balanced dataset
-balanced_data <- bind_rows(majority_sample, minority)
-
-# Check the distribution of the target variable
-table(balanced_data$TARGET_FLAG)
-```
-
-Now that we extracted a random balanced sample from our dataset, let's measure the accuracy:
-```{r}
-logit_model <- glm(
-  TARGET_FLAG ~ AGE + INCOME + MSTATUS + SEX + CAR_USE + EDUCATION + RED_CAR + CLM_FREQ + MVR_PTS +
-    AGE:INCOME + MSTATUS:CAR_USE,
-  data = balanced_data,
-  family = binomial
-)
-
-summary(logit_model)
-
-# get predicted probabilities
-logit_preds <- predict(logit_model, newdata = balanced_data, type = "response")
-
-# convert to 0/1 predictions using 0.5 threshold
-logit_class <- ifelse(logit_preds > 0.5, 1, 0)
-
-# the confusion matrix
-table(Predicted = logit_class, Actual = balanced_data$TARGET_FLAG)
-
-# accuracy
-mean(logit_class == balanced_data$TARGET_FLAG)
-```
-
-After undersampling, the model's accuracy dropped from 75.7% to 66.7%, but it correctly identified far more actual crashes (1,423 vs. 485 true positives). If our goal is to improve crash detection — which is important in an insurance setting — the undersampled model is the better choice, especially since we're keeping the prediction threshold fixed at 0.5.
-
-### Stepwise Selected Logistic Regression Model
-
-In insurance risk assessment, predicting crash probability is critical for determining premiums and identifying high-risk factors. Stepwise regression is a statistical method that iteratively selects the most significant predictors (e.g., driver age, vehicle type, driving history) by evaluating criteria such as p-values or Akaike Information Criterion (AIC). This approach strikes a balance between model simplicity and predictive accuracy, ensuring that only variables with a substantial impact on crash likelihood are included. We will perform a stepwise selected logistic regression model to compare the results with the chosen manual logistic regression model for crash probability.
-
-```{r}
+```{r, echo=FALSE}
 # Prepare the full model formula (excluding INDEX and TARGET_AMT)
 full_formula <- as.formula(
   paste("TARGET_FLAG ~", 
@@ -449,9 +369,17 @@ stepwise_model <- step(null_model,
 
 # View final model summary
 summary(stepwise_model)
+
+# plot residual vs. predicted plot
+sr3 <- simulateResiduals(stepwise_model)
+plot(sr3)
+
+# get the log likelihood for comparison with other models
+ll_model3 <- logLik(stepwise_model)
+ll_model3
 ```
 
-```{r}
+```{r, echo=FALSE}
 # Extract selected variables
 selected_vars <- names(coef(stepwise_model))[-1] # Exclude intercept
 cat("Selected variables by stepwise:\n", paste(selected_vars, collapse = ", "))
@@ -471,6 +399,194 @@ Stepwise logistic regression (bidirectional elimination, a = 0.05) was performed
 - AIC: Reduced by 27% (9427 to 7421), confirming parsimony.
 - Deviance: Residual deviance = 7351.2 (vs null deviance = 9418.0), explaining ~22% variance.
 - Significant Interactions: KIDSDRIV (b = 0.58–1.54, p < 0.001) and TRAVTIME (b = 0.014, p < 0.001) increased risk.
+
+
+# **Select Models**
+
+**What criteria did we use to select our binary logistic model:**
+When selecting our binary logistic model, we focused on two main criteria: avoiding redundancy among variables and ensuring the model would be straightforward to interpret and communicate, especially to a non-technical audience.
+
+Among the three models we evaluated, Model 3 included 15 variables and had the strongest performance metrics: **AIC = 7418.2**, **log-likelihood = -3674.088**, **ROC = 0.81**, **accuracy = 78.78%**, **AUC = 0.8109**, and **F1 score = 0.8647**. However, we identified redundancy in some predictors—for example, both `CLM_FREQ` and `OLDCLAIM` reflect claim history within the past five years, which may introduce multicollinearity without adding meaningful information.
+
+Model 1, which uses the Random Forest technique and includes 10 variables, performed slightly below Model 3 but still showed strong metrics: **AIC = 7762.1**, **log-likelihood = -3845.048**, **ROC = 0.79**, **accuracy = 77.36%**, **AUC = 0.7866**, and **F1 score = 0.8581**. Importantly, it includes most of the key predictors—such as `URBANICITY`, `JOB`, `INCOME`, `REVOKED`, `CAR_TYPE`, `AGE`, and `KIDSDRIV`—which keeps the model both interpretable and effective, without overcomplicating the explanation.
+
+Model 2 performed the worst across all metrics: **AIC = 8371.4**, **log-likelihood = -4157.695**, **ROC = 0.73**, **accuracy = 75.71%**, **AUC = 0.7300**, and **F1 score = 0.8518**. While it was built with a focus on car crash risk variables, it appears to lack the predictive power needed to accurately identify true positives— individuals who were actually involved in a crash.
+
+Ultimately, we selected our final model by balancing statistical performance with interpretability, prioritizing models that retained key predictors without redundancy or unnecessary complexity.
+
+### Random Forest (Binary Logistic Regression Model 1) (Confusion Matrix, ROC curve, and AUC value)
+```{r, echo=FALSE}
+# Predict probabilities on the training data
+prediction_prob_train1 <- predict(rf_model, clean_insurance_training_data, type="response")
+
+# Predict classes (binary classification using a threshold of 0.5)
+threshold <- 0.5
+prediction_class_train1 <- ifelse(prediction_prob_train1 > threshold, 1, 0)
+
+# Calculate performance metrics on the training dataset
+# Confusion Matrix
+conf_matrix_train1 <- confusionMatrix(as.factor(prediction_class_train1), 
+                                     as.factor(clean_insurance_training_data$TARGET_FLAG))
+print(conf_matrix_train1)
+
+# Accuracy
+accuracy1 <- sum(prediction_class_train1 == clean_insurance_training_data$TARGET_FLAG) / 
+  length(clean_insurance_training_data$TARGET_FLAG)
+cat("Accuracy: ", accuracy1, "\n")
+
+# Classification Error Rate
+classification_error_rate1 <- 1 - accuracy1
+cat("Classification Error Rate: ", classification_error_rate1, "\n")
+
+# Precision
+precision1 <- conf_matrix_train1$byClass["Pos Pred Value"]
+cat("Precision: ", precision1, "\n")
+
+# Sensitivity (Recall or True Positive Rate)
+sensitivity1 <- conf_matrix_train1$byClass["Sensitivity"]
+cat("Sensitivity: ", sensitivity1, "\n")
+
+# Specificity (True Negative Rate)
+specificity1 <- conf_matrix_train1$byClass["Specificity"]
+cat("Specificity: ", specificity1, "\n")
+
+# F1 Score
+f1_score1 <- 2 * (precision1 * sensitivity1) / (precision1 + sensitivity1)
+cat("F1 Score: ", f1_score1, "\n")
+
+# AUC (Area Under the Curve)
+roc_curve1 <- roc(clean_insurance_training_data$TARGET_FLAG, prediction_prob_train1)
+auc_value1 <- auc(roc_curve1)
+cat("AUC: ", auc_value1, "\n")
+
+# Plot ROC curve with AUC in the title
+plot(roc_curve1, main = paste("ROC Curve Model 1 - AUC:", 
+                             round(auc(roc_curve1), 2)), col = "red3")
+```
+
+### Manually Selected Binary Logisitic Regresion Model (Model 2) (Confusion Matrix, ROC curve, and AUC value)
+```{r, echo=FALSE}
+# Predict probabilities on the training data
+prediction_prob_train2 <- predict(logit_model, clean_insurance_training_data, type="response")
+
+# Predict classes (binary classification using a threshold of 0.5)
+threshold <- 0.5
+prediction_class_train2 <- ifelse(prediction_prob_train2 > threshold, 1, 0)
+
+# Calculate performance metrics on the training dataset
+# Confusion Matrix
+conf_matrix_train2 <- confusionMatrix(as.factor(prediction_class_train2), 
+                                     as.factor(clean_insurance_training_data$TARGET_FLAG))
+print(conf_matrix_train2)
+
+# Accuracy
+accuracy2 <- sum(prediction_class_train2 == clean_insurance_training_data$TARGET_FLAG) / 
+  length(clean_insurance_training_data$TARGET_FLAG)
+cat("Accuracy: ", accuracy2, "\n")
+
+# Classification Error Rate
+classification_error_rate2 <- 1 - accuracy2
+cat("Classification Error Rate: ", classification_error_rate2, "\n")
+
+# Precision
+precision2 <- conf_matrix_train2$byClass["Pos Pred Value"]
+cat("Precision: ", precision2, "\n")
+
+# Sensitivity (Recall or True Positive Rate)
+sensitivity2 <- conf_matrix_train2$byClass["Sensitivity"]
+cat("Sensitivity: ", sensitivity2, "\n")
+
+# Specificity (True Negative Rate)
+specificity2 <- conf_matrix_train2$byClass["Specificity"]
+cat("Specificity: ", specificity2, "\n")
+
+# F1 Score
+f1_score2 <- 2 * (precision2 * sensitivity2) / (precision2 + sensitivity2)
+cat("F1 Score: ", f1_score2, "\n")
+
+# AUC (Area Under the Curve)
+roc_curve2 <- roc(clean_insurance_training_data$TARGET_FLAG, prediction_prob_train2)
+auc_value2 <- auc(roc_curve2)
+cat("AUC: ", auc_value2, "\n")
+
+# Plot ROC curve with AUC in the title
+plot(roc_curve2, main = paste("ROC Curve Model 2 - AUC:", 
+                             round(auc(roc_curve2), 2)), col = "blue")
+```
+
+### Stepwise Selected Logistic Regression Model (Model 3) (Confusion Matrix, ROC curve, and AUC value)
+```{r, echo=FALSE}
+# Predict probabilities on the training data
+prediction_prob_train3 <- predict(stepwise_model, clean_insurance_training_data, type="response")
+
+# Predict classes (binary classification using a threshold of 0.5)
+threshold <- 0.5
+prediction_class_train3 <- ifelse(prediction_prob_train3 > threshold, 1, 0)
+
+# Calculate performance metrics on the training dataset
+# Confusion Matrix
+conf_matrix_train3 <- confusionMatrix(as.factor(prediction_class_train3), 
+                                     as.factor(clean_insurance_training_data$TARGET_FLAG))
+print(conf_matrix_train3)
+
+# Accuracy
+accuracy3 <- sum(prediction_class_train3 == clean_insurance_training_data$TARGET_FLAG) / 
+  length(clean_insurance_training_data$TARGET_FLAG)
+cat("Accuracy: ", accuracy3, "\n")
+
+# Classification Error Rate
+classification_error_rate3 <- 1 - accuracy3
+cat("Classification Error Rate: ", classification_error_rate3, "\n")
+
+# Precision
+precision3 <- conf_matrix_train3$byClass["Pos Pred Value"]
+cat("Precision: ", precision3, "\n")
+
+# Sensitivity (Recall or True Positive Rate)
+sensitivity3 <- conf_matrix_train3$byClass["Sensitivity"]
+cat("Sensitivity: ", sensitivity2, "\n")
+
+# Specificity (True Negative Rate)
+specificity3 <- conf_matrix_train3$byClass["Specificity"]
+cat("Specificity: ", specificity3, "\n")
+
+# F1 Score
+f1_score3 <- 2 * (precision3 * sensitivity3) / (precision3 + sensitivity3)
+cat("F1 Score: ", f1_score3, "\n")
+
+# AUC (Area Under the Curve)
+roc_curve3 <- roc(clean_insurance_training_data$TARGET_FLAG, prediction_prob_train3)
+auc_value3 <- auc(roc_curve3)
+cat("AUC: ", auc_value3, "\n")
+
+# Plot ROC curve with AUC in the title
+plot(roc_curve3, main = paste("ROC Curve Model 3 - AUC:", 
+                             round(auc(roc_curve3), 2)), col = "green")
+```
+### ROC Curve Comparison
+
+To visualize and compare the discriminative performance of all three models, we plotted their ROC curves. This helps illustrate how each model balances sensitivity and specificity across different thresholds. As shown in the plot below, Model 3 has the highest AUC, but Model 1 closely follows, offering strong performance with fewer predictors.
+```{r, echo=FALSE}
+# Combined ROC curve plot for all three models
+plot(roc_curve1, col = "blue", lwd = 2, main = "ROC Curve Comparison")
+plot(roc_curve2, col = "red", lwd = 2, add = TRUE)
+plot(roc_curve3, col = "darkgreen", lwd = 2, add = TRUE)
+abline(a = 0, b = 1, lty = 2, col = "gray")
+
+legend("bottomright", legend = c(
+  paste("Model 1 (AUC =", round(auc(roc_curve1), 2), ")"),
+  paste("Model 2 (AUC =", round(auc(roc_curve2), 2), ")"),
+  paste("Model 3 (AUC =", round(auc(roc_curve3), 2), ")")
+), col = c("blue", "red", "darkgreen"), lwd = 2)
+```
+The ROC curve comparison above visually illustrates the discriminative performance of all three models. Model 3 (green curve) achieves the highest AUC (0.81), indicating the strongest ability to distinguish between individuals involved in a car crash and those who are not. However, its complexity—with 15 predictors—makes it less practical for real-world applications.
+
+Model 1 (blue curve) follows closely with an AUC of 0.79, delivering nearly equivalent performance to Model 3 but with fewer predictors. This makes it more interpretable and easier to implement.
+
+Model 2 (red curve) has a slightly lower AUC (0.73), but still performs reasonably well, especially given its focus on crash-related risk factors.
+
+Overall, the plot highlights that Model 1 strikes the best balance between predictive performance and simplicity, making it the most suitable choice for practical deployment.
+
 
 ## Crash Amount 
 

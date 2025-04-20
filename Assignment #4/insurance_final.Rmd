@@ -1,0 +1,1344 @@
+---
+title: "HW4"
+author: "Bedros, Haig; Dela Cruz, Sandra; Hugh, Tiffany; Li, Yanyi"
+date: "`r Sys.Date()`"
+output: 
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+<style type="text/css">
+
+h1.title {
+  font-size: 26px;
+  color: Black;
+  text-align: center;
+}
+h4.author { 
+  font-size: 18px;
+  color: Black;
+  text-align: center;
+}
+h4.date {
+  font-size: 12px;
+  color: Black;
+  text-align: center;
+}
+</style>
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(tidy.opts = list(width.cutoff = 50), tidy = TRUE, warning = FALSE)
+```
+
+```{r, include=FALSE}
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(tidyr)
+library(purrr)
+library(DataExplorer)
+library(reshape2)
+library(pROC)
+library(readr)
+library(caret)
+library(DHARMa)
+library(lares)
+library(mice)
+```
+
+```{r, include=FALSE}
+# Import dataset
+insurance_training_data <- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/Assignment%20%234/insurance_training_data.csv")
+insurance_evaluation_data<- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/Assignment%20%234/insurance-evaluation-data%20(1).csv")
+```
+
+# **Data Exploration**
+
+First, let's remove the 'INDEX' column in both of the dataset, since we are not going to need it.
+```{r, echo=FALSE}
+# remove index columns
+insurance_training_data <- insurance_training_data %>% select(-INDEX)
+glimpse(insurance_training_data)
+dim(insurance_training_data)
+
+# do the same for evaluation data
+insurance_evaluation_data <- insurance_evaluation_data %>% select(-INDEX)
+```
+Our insurance training dataset has 8,161 observations and 25 columns. As we can see, there are a lot of data transformations that needs to be done with our variables, like cleaning our values and changing the columns into categorical or numerical.
+
+### Data Transformation of Variables
+First, let's clean our values by removing unecessary characters such as 'z_', '$', ',', and '-'.
+```{r, echo=FALSE}
+# clean the values in our variables by removing 'z_', '$', and ','
+insurance_training_data <- insurance_training_data %>% 
+  mutate(across(everything(), ~gsub("z_|\\$|\\,|\\-","", .x)))
+glimpse(insurance_training_data)
+
+insurance_evaluation_data <- insurance_evaluation_data %>%
+  mutate(across(everything(), ~gsub("z_|\\$|\\,|\\-", "", .x)))
+```
+Now that we have removed these unnecessary characters in our values, let's review our distinct values.
+```{r, echo=FALSE}
+# check distinct values for all columns
+insurance_training_data %>% summarise(across(everything(), ~n_distinct(.)))
+
+# check unique values in possibly categorical columns
+insurance_training_data %>% 
+  distinct(KIDSDRIV, PARENT1, MSTATUS, SEX, EDUCATION, JOB, CAR_USE, CAR_TYPE,
+           RED_CAR, REVOKED, URBANICITY) %>% 
+  map(~unique(.))
+```
+As we can see, 'NA' is present for the `JOB` column. Further investigation with our dataset showed that these individuals with 'NA' in the `JOB` column completed either 'Masters' or 'PhD'; however, we'll fill in the 'NA' with 'Other' just for general consideration and also to prevent bias. 
+```{r, echo=FALSE}
+# fill the missing 'JOB' values with 'Self-employed/ Freelance'
+insurance_training_data <- insurance_training_data %>% 
+  mutate(JOB = ifelse(is.na(JOB), 'Other', JOB))
+# view changes
+insurance_training_data %>% 
+  distinct(JOB)
+
+# do the same for evaluation data
+insurance_evaluation_data <- insurance_evaluation_data %>% 
+  mutate(JOB = ifelse(is.na(JOB), 'Other', JOB))
+```
+Now, let's proceed with converting our columns to the appropriate data types, such as factors, numeric, or ordinal variables
+Convert to factor variables: `TARGET_FLAG`, `KIDSDRIV`, `PARENT1`, `MSTATUS`, `SEX`, `EDUCATION`, `JOB`, `CAR_USE`, `CAR_TYPE`, `RED_CAR`, `REVOKED`, `URBANICITY`
+Convert to numeric variables: `TARGET_AMT`, `AGE`, `HOMEKIDS`, `YOJ`, `INCOME`, `HOME_VAL`, `TRAVTIME`, `BLUEBOOK`, `TIF`, `OLDCLAIM`, `CAR_AGE`, `URBANICITY`
+Convert to ordinal variables: `CLM_FREQ`, `MVR_PTS`
+```{r, echo=FALSE}
+insurance_training_data <- insurance_training_data %>% 
+  mutate(
+    # convert all factor variables
+    across(c(TARGET_FLAG, KIDSDRIV, PARENT1, MSTATUS, SEX, EDUCATION, JOB, CAR_USE,
+             CAR_TYPE, RED_CAR, REVOKED, URBANICITY), as.factor),
+    # convert all numeric variables
+    across(c(TARGET_AMT, AGE, HOMEKIDS, YOJ, INCOME, HOME_VAL, TRAVTIME,
+             BLUEBOOK, TIF, OLDCLAIM, CAR_AGE, URBANICITY), as.numeric),
+    # convert all ordinal variables
+    across(c(CLM_FREQ, MVR_PTS), as.ordered)
+  )
+
+glimpse(insurance_training_data)
+
+# do the same for evaluation data
+insurance_evaluation_data <- insurance_evaluation_data %>% 
+  mutate(
+    # convert all factor variables
+    across(c(TARGET_FLAG, KIDSDRIV, PARENT1, MSTATUS, SEX, EDUCATION, JOB, CAR_USE,
+             CAR_TYPE, RED_CAR, REVOKED, URBANICITY), as.factor),
+    # convert all numeric variables
+    across(c(TARGET_AMT, AGE, HOMEKIDS, YOJ, INCOME, HOME_VAL, TRAVTIME,
+             BLUEBOOK, TIF, OLDCLAIM, CAR_AGE, URBANICITY), as.numeric),
+    # convert all ordinal variables
+    across(c(CLM_FREQ, MVR_PTS), as.ordered)
+  )
+```
+### Summary of Datasets
+Here we see 'NA' values with `AGE`, `YOJ`, `INCOME`, `HOME_VAL`, and `CAR_AGE`. Later we'll impute each of these missing values.
+
+```{r, echo=FALSE}
+#| fig-height: 3
+#| fig-width: 8
+cat("Summary of training data: \n")
+summary(insurance_training_data)
+```
+### Histogram of Continuous Variables
+```{r, echo=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+plot_histogram(insurance_training_data)
+plot_boxplot(insurance_training_data, by='TARGET_FLAG')
+```
+With the view of our histogram, we can see that most of our continuous data are skewed to the right.
+
+### Bar Chart of Categorical Variables
+```{r, echo=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+plot_bar(insurance_training_data)
+```
+Our bar chart reveals a lot about our dataset, such as the fact that most of our customers have 'Blue Collar' jobs, own either an 'SUV' or 'Minivan', are 'High School Graduates' or hold a 'Bachelor's' degree, are single parents (based on `PARENT1`), do not have a ticket (based on `MVR_PTS`), and live in urban areas.
+
+### Boxplot of Some Variables
+```{r, echo=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+plot_boxplot(insurance_training_data, by='TARGET_FLAG')
+```
+The boxplot above separates the data by the TARGET_FLAG variable. Although there are noticeable outliers in our data, we will retain them as they make sense in real-world scenarios. For example, someone could have worked for a long time at a particular company (variable `YOJ`), or someone might use their car for commercial purposes (variable `TRAV_TIME`).
+
+### Visual Correlation of Variables
+```{r, echo=FALSE, message=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+corr_cross(insurance_training_data, 
+           method = "spearman", max_pvalue = 0.05, top = 20)
+
+corr_cross(insurance_training_data, 
+           method = "spearman", max_pvalue = 0.05, 
+           contains = c('TARGET_AMT', 'TARGET_FLAG'))
+```
+To visualize correlations, we use the 'corr_cross' function from the 'lares' package, which allows us to easily compare variables. We set the method to 'Spearman' since we know that most of our data is not normally distributed. In the first cross-correlation graph, we can see that 'OLDCLAIM' is highly correlated with 'CLM_FREQ,' with correlations gradually decreasing as we move down the list to variables with weaker correlations. In the second correlation graph, we observe that our predictor variables are not strongly correlated with the target variables. With all this information, we can now proceed with our data preparation.
+
+# **Data Preparation**
+### Change of Variable
+For the variable `HOME_VAL`, we observed that there are 2,294 instances where the value is zero. We have made the assumption that these individuals are likely renters, as they do not own a home. For the records where `HOME_VAL` is missing, we have decided to label them as 'Unknown'. This is because we are unsure of their homeownership status, and by assigning them as 'Unknown', we avoid introducing any bias into our analysis.
+
+```{r, echo=FALSE}
+# Count zero's in 'HOME_VAL'
+zero_count <- sum(insurance_training_data$HOME_VAL == 0, na.rm = TRUE)
+cat("Zero count for HOME_VAL: \n")
+print(zero_count)
+```
+
+In this step, we are creating a new variable called `HOME_STATUS` based on the values of `HOME_VAL`:
+
+- Individuals with`HOME_VAL` > 0 will be categorized as 'Homeowners'.
+
+- Individuals with `HOME_VAL` == 0 will be categorized as 'Renters'.
+
+- Missing values (NA) in `HOME_VAL` will be labeled as 'Unknown', as we cannot determine their homeownership status.
+```{r, echo=FALSE}
+# create new variable 'HOME_STATUS' to separate renters, homeowners, and unknown
+insurance_training_data <- insurance_training_data %>% 
+  mutate(HOME_STATUS = case_when(
+    is.na(HOME_VAL) ~ "Unknown",
+    HOME_VAL == 0 ~"Renter",
+    TRUE ~ "Homeowner"
+  )) %>% 
+  mutate(HOME_STATUS = factor(HOME_STATUS, levels = c("Homeowner", "Renter", "Unknown")))
+
+head(insurance_training_data[, c("HOME_VAL", "HOME_STATUS")])
+
+# do the same for evaluation dataset
+insurance_evaluation_data <- insurance_evaluation_data %>% 
+  mutate(HOME_STATUS = case_when(
+    is.na(HOME_VAL) ~ "Unknown",
+    HOME_VAL == 0 ~"Renter",
+    TRUE ~ "Homeowner"
+  )) %>% 
+  mutate(HOME_STATUS = factor(HOME_STATUS, levels = c("Homeowner", "Renter", "Unknown")))
+```
+
+Now that we categorize the homeownership, let's delete the `HOME_VAL` column for us to proceed in other imputation of our columns.
+```{r, echo=FALSE}
+insurance_training_data <- insurance_training_data %>% 
+  select(-HOME_VAL)
+colnames(insurance_training_data)
+
+insurance_evaluation_data <- insurance_evaluation_data %>% 
+  select(-HOME_VAL)
+```
+### Imputation of Variables
+For the variables `AGE`, `YOJ`, `INCOME`, and `CAR_AGE`, we will use Predictive Mean Matching (PMM) imputation from the 'mice' package. PMM is a general imputation method that ensures missing values are replaced with observed values, helping to maintain the original relationships in the data, including non-linear ones. We will set the number of imputations (m) to 5, as the dataset is large and this is a standard choice. The default maximum number of iterations (maxit) will remain at 5.
+
+We selected the fifth iteration of AGE to fill in the missing values, as it seems reasonable that the imputed values are near the mean. Additionally, as shown below, the histogram retains its original shape even after the missing values were imputed.
+```{r, echo=FALSE, message=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+# mice imputation
+input_training = insurance_training_data
+method_vector_train <- c("", "", "", "pmm", "",
+                   "pmm", "pmm", "", "", "",
+                   "", "", "", "", "",
+                   "", "", "", "", "",
+                   "", "", "pmm", "", ""
+                   )
+mice_imp_train = mice(input_training, m = 5, 
+                method = method_vector_train)
+summary(input_training$AGE)
+mice_imp_train$imp$AGE
+clean_insurance_training_data <- complete(mice_imp_train, 4)
+summary(clean_insurance_training_data)
+plot_histogram(clean_insurance_training_data)
+
+# do the same for evaluation data
+input_evaluation = insurance_evaluation_data
+method_vector_eval <- c("", "", "", "pmm", "",
+                   "pmm", "pmm", "", "", "",
+                   "", "", "", "", "",
+                   "", "", "", "", "",
+                   "", "", "pmm", "", ""
+                   )
+mice_imp_eval = mice(input_evaluation, m = 5, 
+                method = method_vector_eval)
+clean_insurance_evaluation_data <- complete(mice_imp_eval, 4)
+```
+
+### Transforming MVR_PTS
+We grouped MVR_PTS values of 10 or more into a single category ("10+") for two key reasons. First, such high point values are rare in reality — as reflected in the summary table below — and combining them helps simplify the model without sacrificing interpretability. Second, this transformation ensures consistency between the training and evaluation datasets, preventing prediction errors caused by unseen factor levels (ex. "12" in the evaluation set that wasn’t present in training).
+```{r, echo=FALSE}
+# For training data
+cat("Distribution of MVR_PTS in training data: \n")
+clean_insurance_training_data %>%
+  group_by(MVR_PTS) %>%
+  summarise(count = n()) %>%
+  arrange(as.numeric(as.character(MVR_PTS)))
+
+# For evaluation data
+cat("Distribution of MVR_PTS in evaluation data: \n")
+clean_insurance_evaluation_data %>%
+  group_by(MVR_PTS) %>%
+  summarise(count = n()) %>%
+  arrange(as.numeric(as.character(MVR_PTS)))
+
+```
+```{r, echo=FALSE, message=FALSE}
+# Recode MVR_PTS as character to manipulate
+clean_insurance_training_data$MVR_PTS <- as.character(clean_insurance_training_data$MVR_PTS)
+clean_insurance_evaluation_data$MVR_PTS <- as.character(clean_insurance_evaluation_data$MVR_PTS)
+
+# Create "10+" bucket
+clean_insurance_training_data$MVR_PTS[as.numeric(clean_insurance_training_data$MVR_PTS) >= 10] <- "10+"
+clean_insurance_evaluation_data$MVR_PTS[as.numeric(clean_insurance_evaluation_data$MVR_PTS) >= 10] <- "10+"
+
+# Convert back to factor with consistent levels
+combined_levels <- unique(c(clean_insurance_training_data$MVR_PTS,
+                            clean_insurance_evaluation_data$MVR_PTS))
+clean_insurance_training_data$MVR_PTS <- factor(clean_insurance_training_data$MVR_PTS,
+                                                 levels = combined_levels)
+clean_insurance_evaluation_data$MVR_PTS <- factor(clean_insurance_evaluation_data$MVR_PTS,
+                                                  levels = combined_levels)
+```
+
+# **Build Models**
+
+### Random Forest (Binary Logistic Regression Model 1)
+We'll try to build a model using the 'randomForest' package. See what predictive variables are the the most important and take the top 10 of those variables to build a model. We can see below that the distribution of people who crashed vs. who didn't crash is not balanced and this is something that we'll take note off.
+```{r, echo=FALSE, message=FALSE}
+# confirming the distribution of people who crashed vs. didn't crash
+cat("Distribution of People Who Didn't Crash vs. Crashed: \n")
+table(clean_insurance_training_data$TARGET_FLAG)
+```
+
+```{r, echo=FALSE, message=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+library(randomForest)
+rf_model <- randomForest(TARGET_FLAG ~ ., data = clean_insurance_training_data[, !names(clean_insurance_training_data) %in% "TARGET_AMT"], importance = TRUE)
+importance(rf_model)  # Numeric importance
+varImpPlot(rf_model)  # Visual plot
+```
+Here, we'll use the `MeanDecreaseAccuracy` to choose our predictive variables so not to introduce bias in our model, since we know that the distribution of people who crashed and not are not balanced, let's ignore the other columns like 0/1 and `MeanDecreaseGini`. And to help visualize the top 10 variables, we created a plot.
+
+```{r, echo=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+rf_model <- glm(TARGET_FLAG ~ URBANICITY + JOB + MVR_PTS + INCOME + OLDCLAIM +
+                    REVOKED + CAR_USE + AGE + CAR_TYPE + KIDSDRIV, 
+                data = clean_insurance_training_data, family = binomial)
+summary(rf_model)
+
+# plot residual vs. predicted plot
+sr1 <- simulateResiduals(rf_model)
+plot(sr1)
+
+# get the log likelihood for comparison with other models
+ll_model1 <- logLik(rf_model)
+ll_model1
+```
+As we can see from the model output, MVR_PTS (motor vehicle record points) does not significantly contribute to predicting whether a person was in a car crash, as none of its polynomial terms have p-values less than 0.05. One of the strongest predictors is `URBANICITY`, indicating that individuals living in urban or city areas are significantly more likely to be involved in a car crash. Similarly, `CAR_TYPE` plays an important role — drivers of sports cars, SUVs, vans, panel trucks, and pickups are all more likely to get into accidents compared to those driving the baseline vehicle type. Another important factor is the presence of teenage drivers in the household (`KIDSDRIV`); having one to three kids who drive is associated with a higher likelihood of being in a crash. A revoked license (`REVOKED`) also significantly increases crash risk. On the other hand, private car use (CAR_USEPrivate) is associated with a lower risk of accidents, suggesting that commercial vehicle use is riskier. Additionally, income and age both show negative relationships with accident likelihood, meaning that higher income and older age are associated with a reduced chance of being in a crash. Certain occupations — such as doctors, lawyers, professionals, and managers — also appear to be linked to a lower probability of accidents, likely compared to a baseline category like students or clerical workers. Overall, the model highlights a mix of behavioral, demographic, and socioeconomic factors that contribute to accident risk.
+
+### Manually Selected Binary Logisitic Regresion Model (Model 2)
+For our second model, we included variables like age, income, driving history, and education, variables that might reasonably relate to risk. 
+```{r, echo=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+logit_model <- glm(
+  TARGET_FLAG ~ AGE + INCOME + MSTATUS + SEX + CAR_USE + EDUCATION + RED_CAR + CLM_FREQ + MVR_PTS,
+  data = clean_insurance_training_data,
+  family = binomial
+)
+
+summary(logit_model)
+
+# plot residual vs. predicted plot
+sr2 <- simulateResiduals(logit_model)
+plot(sr2)
+
+# get the log likelihood for comparison with other models
+ll_model2 <- logLik(logit_model)
+ll_model2
+```
+- AGE and INCOME are both negatively related to crash risk — makes sense, older and higher-income people might drive more cautiously.
+- Being married (MSTATUSYes), using a car privately, and being male all lower the odds of a crash in this model.
+- Education matters — people with a Bachelors, Masters, or PhD show lower crash risk than those with less education, though High School level wasn’t significant.
+- Claim frequency (CLM_FREQ.L) has a significant positive effect — not surprising, people who’ve filed more claims are more likely to have another.
+- RED_CAR isn’t significant — which kind of proves the myth of red cars being more prone to accidents.
+- MVR_PTS came in with a lot of noise and no clear pattern — possibly too granular or sparse when treated as ordered.
+
+### Stepwise Selected Logistic Regression Model (Model 3)
+In insurance risk assessment, predicting crash probability is critical for determining premiums and identifying high-risk factors. Stepwise regression is a statistical method that interactively selects the most significant predictors (e.g., driver age, vehicle type, driving history) by evaluating criteria such as p-values or Akaike Information Criterion (AIC). This approach strikes a balance between model simplicity and predictive accuracy, ensuring that only variables with a substantial impact on crash likelihood are included. We will perform a stepwise selected logistic regression model to compare the results with the chosen manual logistic regression model for crash probability.
+
+```{r, echo=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+# Prepare the full model formula (excluding INDEX and TARGET_AMT)
+full_formula <- as.formula(
+  paste("TARGET_FLAG ~", 
+        paste(names(clean_insurance_training_data)[!names(clean_insurance_training_data) %in% 
+                                                    c("INDEX", "TARGET_AMT")], 
+              collapse = " + "))
+)
+
+# Create null model (intercept only)
+null_model <- glm(TARGET_FLAG ~ 1, 
+                 family = binomial, 
+                 data = clean_insurance_training_data)
+
+# Perform stepwise selection (both directions)
+set.seed(1225) # For reproducibility
+stepwise_model <- step(null_model,
+                      scope = list(lower = ~1, 
+                                  upper = full_formula),
+                      direction = "both",
+                      trace = 1,  # Show steps in console
+                      k = log(nrow(clean_insurance_training_data))) # BIC penalty
+
+# View final model summary
+summary(stepwise_model)
+
+# plot residual vs. predicted plot
+sr3 <- simulateResiduals(stepwise_model)
+plot(sr3)
+
+# get the log likelihood for comparison with other models
+ll_model3 <- logLik(stepwise_model)
+ll_model3
+```
+
+```{r, echo=FALSE}
+# Extract selected variables
+selected_vars <- names(coef(stepwise_model))[-1] # Exclude intercept
+cat("Selected variables by stepwise:\n", paste(selected_vars, collapse = ", "))
+```
+
+**Analysis:**
+Stepwise logistic regression (bidirectional elimination, a = 0.05) was performed to predict crash probability (TARGET_FLAG). The final model retained 15 predictors, including URBANICITY, JOB, MSTATUS, and REVOKED. Variables were added iteratively, with AIC decreasing from 9427 (null model) to 7421 (final model), indicating improved fit.
+ 
+**Key Predictors:**
+- URBANICITY (b = 2.36, p < 0.001): Urban drivers had 2.4x higher crash risk than rural counterparts.
+- REVOKED License (b = 0.96, p < 0.001): Drivers with revoked licenses showed 95% higher crash likelihood.
+- CAR_TYPE: Sports cars (b = 0.98, p < 0.001) and SUVs (b = 0.71, p < 0.001) had elevated risk vs sedans.
+- INCOME (b = -6.03e-06, p < 0.001): Higher income correlated with reduced crash probability.
+- MSTATUS (b = -0.42, p < 0.001): Married drivers had 34% lower risk.
+
+**Model Performance:**
+- AIC: Reduced by 27% (9427 to 7421), confirming parsimony.
+- Deviance: Residual deviance = 7351.2 (vs null deviance = 9418.0), explaining ~22% variance.
+- Significant Interactions: KIDSDRIV (b = 0.58–1.54, p < 0.001) and TRAVTIME (b = 0.014, p < 0.001) increased risk.
+
+## Crash Amount 
+
+Now that we've determined which variables predict car crashes. We still need to
+predict how much a crash costs, so the data will be subset to only include people who crashed.
+
+```{r, echo=FALSE}
+# subset include people who had a crash
+crash_training_data <- clean_insurance_training_data %>%
+  filter(TARGET_FLAG == 1)
+```
+
+Earlier we identified age, income, Blue Book value, car age, claim frequency, and
+motor vehicle record points are key predictors of car crashes. These variables also 
+valuable insight into crash costs—for instance, wealthier individuals or those driving 
+newer vehicles may file higher-value claims. Younger or less experienced drivers often
+face higher insurance premiums and may be involved in more accidents than seasoned 
+drivers. Additionally, a high frequency of claims or traffic violations can signal 
+a greater risk of severe accidents. To analyze these relationships, a linear 
+regression model will be developed.
+
+### Manually Chosen Multiple Linear Regression Model (Model 4)
+
+```{r, echo=FALSE}
+# MLR (manually chosen predictors)
+mlr_model_1 <- lm(
+  TARGET_AMT ~ AGE + INCOME + BLUEBOOK + CAR_AGE + CLM_FREQ + MVR_PTS,
+  data = crash_training_data
+)
+summary(mlr_model_1)
+```
+- Bluebook was the only statistically significant predictor (p < 0.001), with a positive coefficient (0.1108), suggesting that higher-value vehicles tend to result in larger claim payouts.
+- Age, income, car age, claim frequency, and MVR points were not statistically significant in predicting claim amounts, as their p-values exceeded 0.05.
+- Residual standard error was approximately 7700, indicating considerable variability in claim amounts not explained by the model. In addition, R-squared is 0.0208, meaning only ~2% of the variance in claim amounts is explained by these predictors.
+
+Even though the multiple linear regression only had one statically significant variable, 
+stepwise regression will be done that could uncover combinations of variables that improve overall
+model performance — even if individual variables aren’t significant in isolation.
+
+### Stepwise Selected Logistic Regression Model (Model 5)
+
+```{r, echo=FALSE}
+full_formula_lm <- as.formula(
+  paste("TARGET_AMT ~", 
+        paste(setdiff(names(crash_training_data), c("INDEX", "TARGET_FLAG")), collapse = " + "))
+)
+
+# null model 
+null_lm <- lm(TARGET_AMT ~ 1, data = crash_training_data)
+
+# stepwise regression (both directions)
+stepwise_lm <- step(
+  null_lm,
+  scope = list(lower = ~1, upper = full_formula_lm),
+  direction = "both",
+  trace = 1
+)
+
+summary(stepwise_lm)
+```
+
+- Bluebook was again the only strongly significant predictor of crash cost. For every
+one dollar increase in vehicle value, the predicted claim increases by $0.11, which is 
+reasonable since more expensive cars tend to result in more expensive claims.
+
+- Based on gender, male drivers, on average, have $632 higher claims than female
+drivers. The p-value is marginally significant, which could reflect riskier driving
+behavior or differences in vehicle ownership between genders.
+
+- Surprisingly, drivers with revoked licenses have $708 lower claim amounts.
+This marginally significant result may be because these individuals tend to own
+less expensive cars or file smaller claims on average.
+
+- Married individuals tend to have $549.74 lower claims compared to non-married drivers. 
+marginally significant result could be explained by differences in insurance coverage
+plans or more cautious driving habits among married people.
+
+- For every additional year of car age, the predicted claim amount decreases by $51.64. 
+While this finding is not statistically significant, it aligns with the idea that older
+vehicles are less expensive to repair or replace.
+
+Overall, the model explains only 1.7% of the variance in claim amounts. This low adjusted R² suggests 
+that important factors influencing crash cost are not captured.
+
+# **Select Models**
+
+**What criteria did we use to select our binary logistic model:**
+When selecting our binary logistic model, we focused on two main criteria: avoiding redundancy among variables and ensuring the model would be straightforward to interpret and communicate, especially to a non-technical audience.
+
+Among the three models we evaluated, Model 3 included 15 variables and had the strongest performance metrics: **AIC = 7418.7**, **log-likelihood = -3674.347**, **ROC = 0.81**, **accuracy = 78.76%**, **AUC = 0.8109**, and **F1 score = 0.8647**. However, we identified redundancy in some predictors—for example, both `CLM_FREQ` and `OLDCLAIM` reflect claim history within the past five years, which may introduce multicollinearity without adding meaningful information.
+
+Model 1, which uses the Random Forest technique and includes 10 variables, performed slightly below Model 3 but still showed strong metrics: **AIC = 7760.3**, **log-likelihood = -3846.128**, **ROC = 0.79**, **accuracy = 77.32%**, **AUC = 0.7865**, and **F1 score = 0.8581**. Importantly, it includes most of the key predictors—such as `URBANICITY`, `JOB`, `INCOME`, `REVOKED`, `CAR_TYPE`, `AGE`, and `KIDSDRIV`—which keeps the model both interpretable and effective, without overcomplicating the explanation.
+
+Model 2 performed the worst across all metrics: **AIC = 8367.3**, **log-likelihood = -4157.663**, **ROC = 0.73**, **accuracy = 75.75%**, **AUC = 0.7299851**, and **F1 score = 0.8521**. While it was built with a focus on car crash risk variables, it appears to lack the predictive power needed to accurately identify true positives— individuals who were actually involved in a crash.
+
+Ultimately, we selected our final model by balancing statistical performance with interpretability, prioritizing models that retained key predictors without redundancy or unnecessary complexity.
+
+### Random Forest (Binary Logistic Regression Model 1) (Confusion Matrix, ROC curve, and AUC value)
+```{r, echo=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+# Predict probabilities on the training data
+prediction_prob_train1 <- predict(rf_model, clean_insurance_training_data, type="response")
+
+# Predict classes (binary classification using a threshold of 0.5)
+threshold <- 0.5
+prediction_class_train1 <- ifelse(prediction_prob_train1 > threshold, 1, 0)
+
+# Calculate performance metrics on the training dataset
+# Confusion Matrix
+conf_matrix_train1 <- confusionMatrix(as.factor(prediction_class_train1), 
+                                     as.factor(clean_insurance_training_data$TARGET_FLAG))
+print(conf_matrix_train1)
+
+# Accuracy
+accuracy1 <- sum(prediction_class_train1 == clean_insurance_training_data$TARGET_FLAG) / 
+  length(clean_insurance_training_data$TARGET_FLAG)
+cat("Accuracy: ", accuracy1, "\n")
+
+# Classification Error Rate
+classification_error_rate1 <- 1 - accuracy1
+cat("Classification Error Rate: ", classification_error_rate1, "\n")
+
+# Precision
+precision1 <- conf_matrix_train1$byClass["Pos Pred Value"]
+cat("Precision: ", precision1, "\n")
+
+# Sensitivity (Recall or True Positive Rate)
+sensitivity1 <- conf_matrix_train1$byClass["Sensitivity"]
+cat("Sensitivity: ", sensitivity1, "\n")
+
+# Specificity (True Negative Rate)
+specificity1 <- conf_matrix_train1$byClass["Specificity"]
+cat("Specificity: ", specificity1, "\n")
+
+# F1 Score
+f1_score1 <- 2 * (precision1 * sensitivity1) / (precision1 + sensitivity1)
+cat("F1 Score: ", f1_score1, "\n")
+
+# AUC (Area Under the Curve)
+roc_curve1 <- roc(clean_insurance_training_data$TARGET_FLAG, prediction_prob_train1)
+auc_value1 <- auc(roc_curve1)
+cat("AUC: ", auc_value1, "\n")
+
+# Plot ROC curve with AUC in the title
+plot(roc_curve1, main = paste("ROC Curve Model 1 - AUC:", 
+                             round(auc(roc_curve1), 2)), col = "red3")
+```
+
+### Manually Selected Binary Logisitic Regresion Model (Model 2) (Confusion Matrix, ROC curve, and AUC value)
+```{r, echo=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+# Predict probabilities on the training data
+prediction_prob_train2 <- predict(logit_model, clean_insurance_training_data, type="response")
+
+# Predict classes (binary classification using a threshold of 0.5)
+threshold <- 0.5
+prediction_class_train2 <- ifelse(prediction_prob_train2 > threshold, 1, 0)
+
+# Calculate performance metrics on the training dataset
+# Confusion Matrix
+conf_matrix_train2 <- confusionMatrix(as.factor(prediction_class_train2), 
+                                     as.factor(clean_insurance_training_data$TARGET_FLAG))
+print(conf_matrix_train2)
+
+# Accuracy
+accuracy2 <- sum(prediction_class_train2 == clean_insurance_training_data$TARGET_FLAG) / 
+  length(clean_insurance_training_data$TARGET_FLAG)
+cat("Accuracy: ", accuracy2, "\n")
+
+# Classification Error Rate
+classification_error_rate2 <- 1 - accuracy2
+cat("Classification Error Rate: ", classification_error_rate2, "\n")
+
+# Precision
+precision2 <- conf_matrix_train2$byClass["Pos Pred Value"]
+cat("Precision: ", precision2, "\n")
+
+# Sensitivity (Recall or True Positive Rate)
+sensitivity2 <- conf_matrix_train2$byClass["Sensitivity"]
+cat("Sensitivity: ", sensitivity2, "\n")
+
+# Specificity (True Negative Rate)
+specificity2 <- conf_matrix_train2$byClass["Specificity"]
+cat("Specificity: ", specificity2, "\n")
+
+# F1 Score
+f1_score2 <- 2 * (precision2 * sensitivity2) / (precision2 + sensitivity2)
+cat("F1 Score: ", f1_score2, "\n")
+
+# AUC (Area Under the Curve)
+roc_curve2 <- roc(clean_insurance_training_data$TARGET_FLAG, prediction_prob_train2)
+auc_value2 <- auc(roc_curve2)
+cat("AUC: ", auc_value2, "\n")
+
+# Plot ROC curve with AUC in the title
+plot(roc_curve2, main = paste("ROC Curve Model 2 - AUC:", 
+                             round(auc(roc_curve2), 2)), col = "blue")
+```
+
+### Stepwise Selected Logistic Regression Model (Model 3) (Confusion Matrix, ROC curve, and AUC value)
+```{r, echo=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+# Predict probabilities on the training data
+prediction_prob_train3 <- predict(stepwise_model, clean_insurance_training_data, type="response")
+
+# Predict classes (binary classification using a threshold of 0.5)
+threshold <- 0.5
+prediction_class_train3 <- ifelse(prediction_prob_train3 > threshold, 1, 0)
+
+# Calculate performance metrics on the training dataset
+# Confusion Matrix
+conf_matrix_train3 <- confusionMatrix(as.factor(prediction_class_train3), 
+                                     as.factor(clean_insurance_training_data$TARGET_FLAG))
+print(conf_matrix_train3)
+
+# Accuracy
+accuracy3 <- sum(prediction_class_train3 == clean_insurance_training_data$TARGET_FLAG) / 
+  length(clean_insurance_training_data$TARGET_FLAG)
+cat("Accuracy: ", accuracy3, "\n")
+
+# Classification Error Rate
+classification_error_rate3 <- 1 - accuracy3
+cat("Classification Error Rate: ", classification_error_rate3, "\n")
+
+# Precision
+precision3 <- conf_matrix_train3$byClass["Pos Pred Value"]
+cat("Precision: ", precision3, "\n")
+
+# Sensitivity (Recall or True Positive Rate)
+sensitivity3 <- conf_matrix_train3$byClass["Sensitivity"]
+cat("Sensitivity: ", sensitivity2, "\n")
+
+# Specificity (True Negative Rate)
+specificity3 <- conf_matrix_train3$byClass["Specificity"]
+cat("Specificity: ", specificity3, "\n")
+
+# F1 Score
+f1_score3 <- 2 * (precision3 * sensitivity3) / (precision3 + sensitivity3)
+cat("F1 Score: ", f1_score3, "\n")
+
+# AUC (Area Under the Curve)
+roc_curve3 <- roc(clean_insurance_training_data$TARGET_FLAG, prediction_prob_train3)
+auc_value3 <- auc(roc_curve3)
+cat("AUC: ", auc_value3, "\n")
+
+# Plot ROC curve with AUC in the title
+plot(roc_curve3, main = paste("ROC Curve Model 3 - AUC:", 
+                             round(auc(roc_curve3), 2)), col = "green")
+```
+### ROC Curve Comparison
+
+To visualize and compare the discriminative performance of all three models, we plotted their ROC curves. This helps illustrate how each model balances sensitivity and specificity across different thresholds. As shown in the plot below, Model 3 has the highest AUC, but Model 1 closely follows, offering strong performance with fewer predictors.
+```{r, echo=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+# Combined ROC curve plot for all three models
+plot(roc_curve1, col = "blue", lwd = 2, main = "ROC Curve Comparison")
+plot(roc_curve2, col = "red", lwd = 2, add = TRUE)
+plot(roc_curve3, col = "darkgreen", lwd = 2, add = TRUE)
+abline(a = 0, b = 1, lty = 2, col = "gray")
+
+legend("bottomright", legend = c(
+  paste("Model 1 (AUC =", round(auc(roc_curve1), 2), ")"),
+  paste("Model 2 (AUC =", round(auc(roc_curve2), 2), ")"),
+  paste("Model 3 (AUC =", round(auc(roc_curve3), 2), ")")
+), col = c("blue", "red", "darkgreen"), lwd = 2)
+```
+The ROC curve comparison above visually illustrates the discriminative performance of all three models. Model 3 (green curve) achieves the highest AUC (0.81), indicating the strongest ability to distinguish between individuals involved in a car crash and those who are not. However, its complexity—with 15 predictors—makes it less practical for real-world applications.
+
+Model 1 (blue curve) follows closely with an AUC of 0.79, delivering nearly equivalent performance to Model 3 but with fewer predictors. This makes it more interpretable and easier to implement.
+
+Model 2 (red curve) has a slightly lower AUC (0.73), but still performs reasonably well, especially given its focus on crash-related risk factors.
+
+Overall, the plot highlights that Model 1 strikes the best balance between predictive performance and simplicity, making it the most suitable choice for practical deployment.
+
+# Comparison of Multiple Linear Regression Models
+```{r, echo=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+# MLR
+cat("Summary of Manually Chosen Multiple Linear Regression Model (Model 4): \n")
+summary(mlr_model_1)
+sqrt(mean(residuals(mlr_model_1)^2))  # RMSE
+
+# Stepwise
+cat("Summary of Stepwise Selected Logistic Regression Model (Model 5): \n")
+summary(stepwise_lm)
+sqrt(mean(residuals(stepwise_lm)^2))  # RMSE
+
+# check linearity, homoscedasticity, outliers
+par(mfrow = c(2, 2))
+cat("Plot of Residuals for Manually Chosen Multiple Linear Regression Model (Model 4): \n")
+plot(mlr_model_1)
+cat("Plot of Residuals for Stepwise Selected Logistic Regression Model (Model 5): \n")
+plot(stepwise_lm)
+```
+We built two multiple linear regression models to predict the cost of a crash, 
+using only individuals who were involved in a crash.
+
+The first model was built manually based on assumption and crash predictors, 
+including demographic and behavioral variables like AGE, INCOME, CLM_FREQ, and
+MVR_PTS. However, only Bluebook (vehicle value) emerged as statistically significant.
+The model had an adjusted R² of 0.012 and an RMSE of 7661, suggesting a poor fit
+with high variability.
+
+The second model was generated using stepwise selection, and retained just five 
+predictors: BLUEBOOK, SEX, REVOKED, MSTATUS, and CAR_AGE. This model had a slightly
+better adjusted R² of 0.017 and a comparable RMSE of 7666. While most predictors
+were only marginally significant, the overall model was statistically stronger 
+(F-statistic = 8.499, p-value = 5.592e-08) and easier to interpret.
+
+The stepwise model should be selected due to its stronger overall performance and
+simpler structure. Despite the modest predictive power, it highlights that Bluebook
+is the most influential factor in estimating claim cost, and that other key drivers 
+of claim value may not be captured in this dataset.
+
+
+# **Predictions Using Evaluation Data Set**
+### Random Forest (Binary Logistic Regression Model 1)
+```{r, echo=FALSE}
+# Make predictions on the evaluation dataset
+prediction_prob_eval_model1 <- predict(rf_model, 
+                                       clean_insurance_evaluation_data, type="response")
+
+# Predict classes using the same threshold of 0.5
+prediction_class_eval_model1 <- ifelse(prediction_prob_eval_model1 > 
+                                         threshold, 1, 0)
+head(prediction_class_eval_model1, 20)
+```
+
+### Manually Selected Binary Logisitic Regresion Model (Model 2)
+```{r, echo=FALSE}
+# Make predictions on the evaluation dataset
+prediction_prob_eval_model2 <- predict(logit_model, 
+                                       clean_insurance_evaluation_data, type="response")
+
+# Predict classes using the same threshold of 0.5
+prediction_class_eval_model2 <- ifelse(prediction_prob_eval_model2 > 
+                                         threshold, 1, 0)
+head(prediction_class_eval_model2, 20)
+```
+
+### Stepwise Selected Logistic Regression Model (Model 3)
+```{r, echo=FALSE}
+# Make predictions on the evaluation dataset
+prediction_prob_eval_model3 <- predict(stepwise_model, 
+                                       clean_insurance_evaluation_data, type="response")
+
+# Predict classes using the same threshold of 0.5
+prediction_class_eval_model3 <- ifelse(prediction_prob_eval_model3 > 
+                                         threshold, 1, 0)
+head(prediction_class_eval_model3, 20)
+```
+
+### Manually Chosen Multiple Linear Regression Model (Model 4)
+
+```{r, echo=FALSE}
+# Predict TARGET_AMT for ALL observations in evaluation data
+prediction_amt_eval1 <- predict(
+  mlr_model_1,
+  newdata = clean_insurance_evaluation_data
+)
+
+# Create a simple results table
+mlr_model_predictions <- data.frame(
+  ID = 1:nrow(clean_insurance_evaluation_data),
+  TARGET_AMT_PRED = round(prediction_amt_eval1, 2)
+)
+
+# Display first 10 rows
+head(mlr_model_predictions, 20)
+```
+
+### Stepwise Selected Logistic Regression Model (Model 5)
+
+```{r, echo=FALSE}
+# Predict TARGET_AMT for ALL observations using stepwise_lm (Model 5)
+prediction_amt_eval_model5 <- predict(
+  stepwise_lm,
+  newdata = clean_insurance_evaluation_data
+)
+
+# Create results table for Model 5 only
+model5_predictions <- data.frame(
+  ID = 1:nrow(clean_insurance_evaluation_data),
+  TARGET_AMT_PRED = round(prediction_amt_eval_model5, 2)
+)
+
+# Display first 10 rows
+head(model5_predictions, 20)
+```
+
+### Appendix
+```{r, echo=TRUE, results='hide', eval=FALSE}
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(tidyr)
+library(purrr)
+library(DataExplorer)
+library(reshape2)
+library(pROC)
+library(readr)
+library(caret)
+library(DHARMa)
+library(lares)
+library(mice)
+
+# Import dataset
+insurance_training_data <- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/Assignment%20%234/insurance_training_data.csv")
+insurance_evaluation_data<- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/Assignment%20%234/insurance-evaluation-data%20(1).csv")
+
+# remove index columns
+insurance_training_data <- insurance_training_data %>% select(-INDEX)
+glimpse(insurance_training_data)
+dim(insurance_training_data)
+
+# do the same for evaluation data
+insurance_evaluation_data <- insurance_evaluation_data %>% select(-INDEX)
+
+# clean the values in our variables by removing 'z_', '$', and ','
+insurance_training_data <- insurance_training_data %>% 
+  mutate(across(everything(), ~gsub("z_|\\$|\\,|\\-","", .x)))
+glimpse(insurance_training_data)
+
+insurance_evaluation_data <- insurance_evaluation_data %>%
+  mutate(across(everything(), ~gsub("z_|\\$|\\,|\\-", "", .x)))
+
+# check distinct values for all columns
+insurance_training_data %>% summarise(across(everything(), ~n_distinct(.)))
+
+# check unique values in possibly categorical columns
+insurance_training_data %>% 
+  distinct(KIDSDRIV, PARENT1, MSTATUS, SEX, EDUCATION, JOB, CAR_USE, CAR_TYPE,
+           RED_CAR, REVOKED, URBANICITY) %>% 
+  map(~unique(.))
+
+# fill the missing 'JOB' values with 'Self-employed/ Freelance'
+insurance_training_data <- insurance_training_data %>% 
+  mutate(JOB = ifelse(is.na(JOB), 'Other', JOB))
+# view changes
+insurance_training_data %>% 
+  distinct(JOB)
+
+# do the same for evaluation data
+insurance_evaluation_data <- insurance_evaluation_data %>% 
+  mutate(JOB = ifelse(is.na(JOB), 'Other', JOB))
+
+insurance_training_data <- insurance_training_data %>% 
+  mutate(
+    # convert all factor variables
+    across(c(TARGET_FLAG, KIDSDRIV, PARENT1, MSTATUS, SEX, EDUCATION, JOB, CAR_USE,
+             CAR_TYPE, RED_CAR, REVOKED, URBANICITY), as.factor),
+    # convert all numeric variables
+    across(c(TARGET_AMT, AGE, HOMEKIDS, YOJ, INCOME, HOME_VAL, TRAVTIME,
+             BLUEBOOK, TIF, OLDCLAIM, CAR_AGE, URBANICITY), as.numeric),
+    # convert all ordinal variables
+    across(c(CLM_FREQ, MVR_PTS), as.ordered)
+  )
+
+glimpse(insurance_training_data)
+
+# do the same for evaluation data
+insurance_evaluation_data <- insurance_evaluation_data %>% 
+  mutate(
+    # convert all factor variables
+    across(c(TARGET_FLAG, KIDSDRIV, PARENT1, MSTATUS, SEX, EDUCATION, JOB, CAR_USE,
+             CAR_TYPE, RED_CAR, REVOKED, URBANICITY), as.factor),
+    # convert all numeric variables
+    across(c(TARGET_AMT, AGE, HOMEKIDS, YOJ, INCOME, HOME_VAL, TRAVTIME,
+             BLUEBOOK, TIF, OLDCLAIM, CAR_AGE, URBANICITY), as.numeric),
+    # convert all ordinal variables
+    across(c(CLM_FREQ, MVR_PTS), as.ordered)
+  )
+
+cat("Summary of training data: \n")
+summary(insurance_training_data)
+
+plot_histogram(insurance_training_data)
+plot_boxplot(insurance_training_data, by='TARGET_FLAG')
+
+plot_bar(insurance_training_data)
+
+plot_boxplot(insurance_training_data, by='TARGET_FLAG')
+
+corr_cross(insurance_training_data, 
+           method = "spearman", max_pvalue = 0.05, top = 20)
+
+corr_cross(insurance_training_data, 
+           method = "spearman", max_pvalue = 0.05, 
+           contains = c('TARGET_AMT', 'TARGET_FLAG'))
+
+# Count zero's in 'HOME_VAL'
+zero_count <- sum(insurance_training_data$HOME_VAL == 0, na.rm = TRUE)
+cat("Zero count for HOME_VAL: \n")
+print(zero_count)
+
+# create new variable 'HOME_STATUS' to separate renters, homeowners, and unknown
+insurance_training_data <- insurance_training_data %>% 
+  mutate(HOME_STATUS = case_when(
+    is.na(HOME_VAL) ~ "Unknown",
+    HOME_VAL == 0 ~"Renter",
+    TRUE ~ "Homeowner"
+  )) %>% 
+  mutate(HOME_STATUS = factor(HOME_STATUS, levels = c("Homeowner", "Renter", "Unknown")))
+
+head(insurance_training_data[, c("HOME_VAL", "HOME_STATUS")])
+
+# do the same for evaluation dataset
+insurance_evaluation_data <- insurance_evaluation_data %>% 
+  mutate(HOME_STATUS = case_when(
+    is.na(HOME_VAL) ~ "Unknown",
+    HOME_VAL == 0 ~"Renter",
+    TRUE ~ "Homeowner"
+  )) %>% 
+  mutate(HOME_STATUS = factor(HOME_STATUS, levels = c("Homeowner", "Renter", "Unknown")))
+
+insurance_training_data <- insurance_training_data %>% 
+  select(-HOME_VAL)
+colnames(insurance_training_data)
+
+insurance_evaluation_data <- insurance_evaluation_data %>% 
+  select(-HOME_VAL)
+
+# mice imputation
+input_training = insurance_training_data
+method_vector_train <- c("", "", "", "pmm", "",
+                   "pmm", "pmm", "", "", "",
+                   "", "", "", "", "",
+                   "", "", "", "", "",
+                   "", "", "pmm", "", ""
+                   )
+mice_imp_train = mice(input_training, m = 5, 
+                method = method_vector_train)
+summary(input_training$AGE)
+mice_imp_train$imp$AGE
+clean_insurance_training_data <- complete(mice_imp_train, 4)
+summary(clean_insurance_training_data)
+plot_histogram(clean_insurance_training_data)
+
+# do the same for evaluation data
+input_evaluation = insurance_evaluation_data
+method_vector_eval <- c("", "", "", "pmm", "",
+                   "pmm", "pmm", "", "", "",
+                   "", "", "", "", "",
+                   "", "", "", "", "",
+                   "", "", "pmm", "", ""
+                   )
+mice_imp_eval = mice(input_evaluation, m = 5, 
+                method = method_vector_eval)
+clean_insurance_evaluation_data <- complete(mice_imp_eval, 4)
+
+# For training data
+cat("Distribution of MVR_PTS in training data: \n")
+clean_insurance_training_data %>%
+  group_by(MVR_PTS) %>%
+  summarise(count = n()) %>%
+  arrange(as.numeric(as.character(MVR_PTS)))
+
+# For evaluation data
+cat("Distribution of MVR_PTS in evaluation data: \n")
+clean_insurance_evaluation_data %>%
+  group_by(MVR_PTS) %>%
+  summarise(count = n()) %>%
+  arrange(as.numeric(as.character(MVR_PTS)))
+
+# Recode MVR_PTS as character to manipulate
+clean_insurance_training_data$MVR_PTS <- as.character(clean_insurance_training_data$MVR_PTS)
+clean_insurance_evaluation_data$MVR_PTS <- as.character(clean_insurance_evaluation_data$MVR_PTS)
+
+# Create "10+" bucket
+clean_insurance_training_data$MVR_PTS[as.numeric(clean_insurance_training_data$MVR_PTS) >= 10] <- "10+"
+clean_insurance_evaluation_data$MVR_PTS[as.numeric(clean_insurance_evaluation_data$MVR_PTS) >= 10] <- "10+"
+
+# Convert back to factor with consistent levels
+combined_levels <- unique(c(clean_insurance_training_data$MVR_PTS,
+                            clean_insurance_evaluation_data$MVR_PTS))
+clean_insurance_training_data$MVR_PTS <- factor(clean_insurance_training_data$MVR_PTS,
+                                                 levels = combined_levels)
+clean_insurance_evaluation_data$MVR_PTS <- factor(clean_insurance_evaluation_data$MVR_PTS,
+                                                  levels = combined_levels)
+
+# confirming the distribution of people who crashed vs. didn't crash
+cat("Distribution of People Who Didn't Crash vs. Crashed: \n")
+table(clean_insurance_training_data$TARGET_FLAG)
+
+library(randomForest)
+rf_model <- randomForest(TARGET_FLAG ~ ., data = clean_insurance_training_data[, !names(clean_insurance_training_data) %in% "TARGET_AMT"], importance = TRUE)
+importance(rf_model)  # Numeric importance
+varImpPlot(rf_model)  # Visual plot
+
+rf_model <- glm(TARGET_FLAG ~ URBANICITY + JOB + MVR_PTS + INCOME + OLDCLAIM +
+                    REVOKED + CAR_USE + AGE + CAR_TYPE + KIDSDRIV, 
+                data = clean_insurance_training_data, family = binomial)
+summary(rf_model)
+
+# plot residual vs. predicted plot
+sr1 <- simulateResiduals(rf_model)
+plot(sr1)
+
+# get the log likelihood for comparison with other models
+ll_model1 <- logLik(rf_model)
+ll_model1
+
+logit_model <- glm(
+  TARGET_FLAG ~ AGE + INCOME + MSTATUS + SEX + CAR_USE + EDUCATION + RED_CAR + CLM_FREQ + MVR_PTS,
+  data = clean_insurance_training_data,
+  family = binomial
+)
+
+summary(logit_model)
+
+# plot residual vs. predicted plot
+sr2 <- simulateResiduals(logit_model)
+plot(sr2)
+
+# get the log likelihood for comparison with other models
+ll_model2 <- logLik(logit_model)
+ll_model2
+
+# Prepare the full model formula (excluding INDEX and TARGET_AMT)
+full_formula <- as.formula(
+  paste("TARGET_FLAG ~", 
+        paste(names(clean_insurance_training_data)[!names(clean_insurance_training_data) %in% 
+                                                    c("INDEX", "TARGET_AMT")], 
+              collapse = " + "))
+)
+
+# Create null model (intercept only)
+null_model <- glm(TARGET_FLAG ~ 1, 
+                 family = binomial, 
+                 data = clean_insurance_training_data)
+
+# Perform stepwise selection (both directions)
+set.seed(1225) # For reproducibility
+stepwise_model <- step(null_model,
+                      scope = list(lower = ~1, 
+                                  upper = full_formula),
+                      direction = "both",
+                      trace = 1,  # Show steps in console
+                      k = log(nrow(clean_insurance_training_data))) # BIC penalty
+
+# View final model summary
+summary(stepwise_model)
+
+# plot residual vs. predicted plot
+sr3 <- simulateResiduals(stepwise_model)
+plot(sr3)
+
+# get the log likelihood for comparison with other models
+ll_model3 <- logLik(stepwise_model)
+ll_model3
+
+# Extract selected variables
+selected_vars <- names(coef(stepwise_model))[-1] # Exclude intercept
+cat("Selected variables by stepwise:\n", paste(selected_vars, collapse = ", "))
+
+# subset include people who had a crash
+crash_training_data <- clean_insurance_training_data %>%
+  filter(TARGET_FLAG == 1)
+
+# MLR (manually chosen predictors)
+mlr_model_1 <- lm(
+  TARGET_AMT ~ AGE + INCOME + BLUEBOOK + CAR_AGE + CLM_FREQ + MVR_PTS,
+  data = crash_training_data
+)
+summary(mlr_model_1)
+
+full_formula_lm <- as.formula(
+  paste("TARGET_AMT ~", 
+        paste(setdiff(names(crash_training_data), c("INDEX", "TARGET_FLAG")), collapse = " + "))
+)
+
+# null model 
+null_lm <- lm(TARGET_AMT ~ 1, data = crash_training_data)
+
+# stepwise regression (both directions)
+stepwise_lm <- step(
+  null_lm,
+  scope = list(lower = ~1, upper = full_formula_lm),
+  direction = "both",
+  trace = 1
+)
+
+summary(stepwise_lm)
+
+# Predict probabilities on the training data
+prediction_prob_train1 <- predict(rf_model, clean_insurance_training_data, type="response")
+
+# Predict classes (binary classification using a threshold of 0.5)
+threshold <- 0.5
+prediction_class_train1 <- ifelse(prediction_prob_train1 > threshold, 1, 0)
+
+# Calculate performance metrics on the training dataset
+# Confusion Matrix
+conf_matrix_train1 <- confusionMatrix(as.factor(prediction_class_train1), 
+                                     as.factor(clean_insurance_training_data$TARGET_FLAG))
+print(conf_matrix_train1)
+
+# Accuracy
+accuracy1 <- sum(prediction_class_train1 == clean_insurance_training_data$TARGET_FLAG) / 
+  length(clean_insurance_training_data$TARGET_FLAG)
+cat("Accuracy: ", accuracy1, "\n")
+
+# Classification Error Rate
+classification_error_rate1 <- 1 - accuracy1
+cat("Classification Error Rate: ", classification_error_rate1, "\n")
+
+# Precision
+precision1 <- conf_matrix_train1$byClass["Pos Pred Value"]
+cat("Precision: ", precision1, "\n")
+
+# Sensitivity (Recall or True Positive Rate)
+sensitivity1 <- conf_matrix_train1$byClass["Sensitivity"]
+cat("Sensitivity: ", sensitivity1, "\n")
+
+# Specificity (True Negative Rate)
+specificity1 <- conf_matrix_train1$byClass["Specificity"]
+cat("Specificity: ", specificity1, "\n")
+
+# F1 Score
+f1_score1 <- 2 * (precision1 * sensitivity1) / (precision1 + sensitivity1)
+cat("F1 Score: ", f1_score1, "\n")
+
+# AUC (Area Under the Curve)
+roc_curve1 <- roc(clean_insurance_training_data$TARGET_FLAG, prediction_prob_train1)
+auc_value1 <- auc(roc_curve1)
+cat("AUC: ", auc_value1, "\n")
+
+# Plot ROC curve with AUC in the title
+plot(roc_curve1, main = paste("ROC Curve Model 1 - AUC:", 
+                             round(auc(roc_curve1), 2)), col = "red3")
+
+# Predict probabilities on the training data
+prediction_prob_train2 <- predict(logit_model, clean_insurance_training_data, type="response")
+
+# Predict classes (binary classification using a threshold of 0.5)
+threshold <- 0.5
+prediction_class_train2 <- ifelse(prediction_prob_train2 > threshold, 1, 0)
+
+# Calculate performance metrics on the training dataset
+# Confusion Matrix
+conf_matrix_train2 <- confusionMatrix(as.factor(prediction_class_train2), 
+                                     as.factor(clean_insurance_training_data$TARGET_FLAG))
+print(conf_matrix_train2)
+
+# Accuracy
+accuracy2 <- sum(prediction_class_train2 == clean_insurance_training_data$TARGET_FLAG) / 
+  length(clean_insurance_training_data$TARGET_FLAG)
+cat("Accuracy: ", accuracy2, "\n")
+
+# Classification Error Rate
+classification_error_rate2 <- 1 - accuracy2
+cat("Classification Error Rate: ", classification_error_rate2, "\n")
+
+# Precision
+precision2 <- conf_matrix_train2$byClass["Pos Pred Value"]
+cat("Precision: ", precision2, "\n")
+
+# Sensitivity (Recall or True Positive Rate)
+sensitivity2 <- conf_matrix_train2$byClass["Sensitivity"]
+cat("Sensitivity: ", sensitivity2, "\n")
+
+# Specificity (True Negative Rate)
+specificity2 <- conf_matrix_train2$byClass["Specificity"]
+cat("Specificity: ", specificity2, "\n")
+
+# F1 Score
+f1_score2 <- 2 * (precision2 * sensitivity2) / (precision2 + sensitivity2)
+cat("F1 Score: ", f1_score2, "\n")
+
+# AUC (Area Under the Curve)
+roc_curve2 <- roc(clean_insurance_training_data$TARGET_FLAG, prediction_prob_train2)
+auc_value2 <- auc(roc_curve2)
+cat("AUC: ", auc_value2, "\n")
+
+# Plot ROC curve with AUC in the title
+plot(roc_curve2, main = paste("ROC Curve Model 2 - AUC:", 
+                             round(auc(roc_curve2), 2)), col = "blue")
+
+# Predict probabilities on the training data
+prediction_prob_train3 <- predict(stepwise_model, clean_insurance_training_data, type="response")
+
+# Predict classes (binary classification using a threshold of 0.5)
+threshold <- 0.5
+prediction_class_train3 <- ifelse(prediction_prob_train3 > threshold, 1, 0)
+
+# Calculate performance metrics on the training dataset
+# Confusion Matrix
+conf_matrix_train3 <- confusionMatrix(as.factor(prediction_class_train3), 
+                                     as.factor(clean_insurance_training_data$TARGET_FLAG))
+print(conf_matrix_train3)
+
+# Accuracy
+accuracy3 <- sum(prediction_class_train3 == clean_insurance_training_data$TARGET_FLAG) / 
+  length(clean_insurance_training_data$TARGET_FLAG)
+cat("Accuracy: ", accuracy3, "\n")
+
+# Classification Error Rate
+classification_error_rate3 <- 1 - accuracy3
+cat("Classification Error Rate: ", classification_error_rate3, "\n")
+
+# Precision
+precision3 <- conf_matrix_train3$byClass["Pos Pred Value"]
+cat("Precision: ", precision3, "\n")
+
+# Sensitivity (Recall or True Positive Rate)
+sensitivity3 <- conf_matrix_train3$byClass["Sensitivity"]
+cat("Sensitivity: ", sensitivity2, "\n")
+
+# Specificity (True Negative Rate)
+specificity3 <- conf_matrix_train3$byClass["Specificity"]
+cat("Specificity: ", specificity3, "\n")
+
+# F1 Score
+f1_score3 <- 2 * (precision3 * sensitivity3) / (precision3 + sensitivity3)
+cat("F1 Score: ", f1_score3, "\n")
+
+# AUC (Area Under the Curve)
+roc_curve3 <- roc(clean_insurance_training_data$TARGET_FLAG, prediction_prob_train3)
+auc_value3 <- auc(roc_curve3)
+cat("AUC: ", auc_value3, "\n")
+
+# Plot ROC curve with AUC in the title
+plot(roc_curve3, main = paste("ROC Curve Model 3 - AUC:", 
+                             round(auc(roc_curve3), 2)), col = "green")
+
+# Combined ROC curve plot for all three models
+plot(roc_curve1, col = "blue", lwd = 2, main = "ROC Curve Comparison")
+plot(roc_curve2, col = "red", lwd = 2, add = TRUE)
+plot(roc_curve3, col = "darkgreen", lwd = 2, add = TRUE)
+abline(a = 0, b = 1, lty = 2, col = "gray")
+
+legend("bottomright", legend = c(
+  paste("Model 1 (AUC =", round(auc(roc_curve1), 2), ")"),
+  paste("Model 2 (AUC =", round(auc(roc_curve2), 2), ")"),
+  paste("Model 3 (AUC =", round(auc(roc_curve3), 2), ")")
+), col = c("blue", "red", "darkgreen"), lwd = 2)
+
+# MLR
+cat("Summary of Manually Chosen Multiple Linear Regression Model (Model 4): \n")
+summary(mlr_model_1)
+sqrt(mean(residuals(mlr_model_1)^2))  # RMSE
+
+# Stepwise
+cat("Summary of Stepwise Selected Logistic Regression Model (Model 5): \n")
+summary(stepwise_lm)
+sqrt(mean(residuals(stepwise_lm)^2))  # RMSE
+
+# check linearity, homoscedasticity, outliers
+par(mfrow = c(2, 2))
+cat("Plot of Residuals for Manually Chosen Multiple Linear Regression Model (Model 4): \n")
+plot(mlr_model_1)
+cat("Plot of Residuals for Stepwise Selected Logistic Regression Model (Model 5): \n")
+plot(stepwise_lm)
+
+# Make predictions on the evaluation dataset
+prediction_prob_eval_model1 <- predict(rf_model, 
+                                       clean_insurance_evaluation_data, type="response")
+
+# Predict classes using the same threshold of 0.5
+prediction_class_eval_model1 <- ifelse(prediction_prob_eval_model1 > 
+                                         threshold, 1, 0)
+head(prediction_class_eval_model1, 20)
+
+# Make predictions on the evaluation dataset
+prediction_prob_eval_model2 <- predict(logit_model, 
+                                       clean_insurance_evaluation_data, type="response")
+
+# Predict classes using the same threshold of 0.5
+prediction_class_eval_model2 <- ifelse(prediction_prob_eval_model2 > 
+                                         threshold, 1, 0)
+head(prediction_class_eval_model2, 20)
+
+# Make predictions on the evaluation dataset
+prediction_prob_eval_model3 <- predict(stepwise_model, 
+                                       clean_insurance_evaluation_data, type="response")
+
+# Predict classes using the same threshold of 0.5
+prediction_class_eval_model3 <- ifelse(prediction_prob_eval_model3 > 
+                                         threshold, 1, 0)
+head(prediction_class_eval_model3, 20)
+
+# Predict TARGET_AMT for ALL observations in evaluation data
+prediction_amt_eval1 <- predict(
+  mlr_model_1,
+  newdata = clean_insurance_evaluation_data
+)
+
+# Create a simple results table
+mlr_model_predictions <- data.frame(
+  ID = 1:nrow(clean_insurance_evaluation_data),
+  TARGET_AMT_PRED = round(prediction_amt_eval1, 2)
+)
+
+# Display first 10 rows
+head(mlr_model_predictions, 20)
+
+# Predict TARGET_AMT for ALL observations using stepwise_lm (Model 5)
+prediction_amt_eval_model5 <- predict(
+  stepwise_lm,
+  newdata = clean_insurance_evaluation_data
+)
+
+# Create results table for Model 5 only
+model5_predictions <- data.frame(
+  ID = 1:nrow(clean_insurance_evaluation_data),
+  TARGET_AMT_PRED = round(prediction_amt_eval_model5, 2)
+)
+
+# Display first 10 rows
+head(model5_predictions, 20)
+```

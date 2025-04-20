@@ -777,3 +777,77 @@ prediction_class_eval_model3 <- ifelse(prediction_prob_eval_model3 >
                                          threshold, 1, 0)
 print(prediction_class_eval_model3)
 ```
+
+### Manually Chosen Multiple Linear Regression Model (Model 4)
+
+```{r, echo=FALSE}
+# Predict TARGET_AMT for ALL observations in evaluation data
+prediction_amt_eval1 <- predict(
+  mlr_model_1,
+  newdata = clean_insurance_evaluation_data
+)
+
+# Create a simple results table
+mlr_model_predictions <- data.frame(
+  ID = 1:nrow(clean_insurance_evaluation_data),
+  TARGET_AMT_PRED = round(prediction_amt_eval1, 2)
+)
+
+# Display first 10 rows
+head(mlr_model_predictions, 20)
+```
+
+### Manually Chosen Multiple Linear Regression Model (Model 4)
+
+```{r, echo=FALSE}
+# Predict TARGET_AMT for ALL observations in evaluation data
+prediction_amt_eval1 <- predict(
+  mlr_model_1,
+  newdata = clean_insurance_evaluation_data
+)
+
+# Create a simple results table
+mlr_model_predictions <- data.frame(
+  ID = 1:nrow(clean_insurance_evaluation_data),
+  TARGET_AMT_PRED = round(prediction_amt_eval1, 2)
+)
+
+# Display first 10 rows
+head(mlr_model_predictions, 20)
+```
+
+### Stepwise Selected Logistic Regression Model (Model 5)
+
+```{r, echo=FALSE}
+# Predict TARGET_AMT for ALL observations using stepwise_lm (Model 5)
+prediction_amt_eval_model5 <- predict(
+  stepwise_lm,
+  newdata = clean_insurance_evaluation_data
+)
+
+# Create results table for Model 5 only
+model5_predictions <- data.frame(
+  ID = 1:nrow(clean_insurance_evaluation_data),
+  TARGET_AMT_PRED = round(prediction_amt_eval_model5, 2)
+)
+
+# Display first 10 rows
+head(model5_predictions, 20)
+```
+
+```{r, echo=FALSE}
+# Predict TARGET_AMT for ALL observations using stepwise_lm (Model 5)
+prediction_amt_eval_model5 <- predict(
+  stepwise_lm,
+  newdata = clean_insurance_evaluation_data
+)
+
+# Create results table for Model 5 only
+model5_predictions <- data.frame(
+  ID = 1:nrow(clean_insurance_evaluation_data),
+  TARGET_AMT_PRED = round(prediction_amt_eval_model5, 2)
+)
+
+# Display first 10 rows
+head(model5_predictions, 20)
+```

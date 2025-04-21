@@ -64,4 +64,14 @@ wine_evaluation_data <- wine_evaluation_data %>% select(-IN)
 ```
 Our wine training dataset has 12,795 observations and 15 columns. As we can see, there are a lot of data transformations that needs to be done with our variables, like cleaning our values and changing the columns into categorical values, like for `LabelAppeal` and `STARS`.
 
+### Data Transformation of Variables
+First, we clean the data by removing leading hyphens (-) from numeric values, as chemical concentrations cannot be negative, and such entries likely result from formatting errors.
+```{r, echo=FALSE}
+# clean the values in our variables by removing hyphens
+wine_training_data <- wine_training_data %>% 
+  mutate(across(everything(), ~gsub("\\-","", .x)))
+glimpse(wine_training_data)
 
+wine_evaluation_data <- wine_evaluation_data %>%
+  mutate(across(everything(), ~gsub("\\-", "", .x)))
+```

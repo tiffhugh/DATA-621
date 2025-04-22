@@ -115,7 +115,7 @@ wine_evaluation_data <- wine_evaluation_data %>%
   )
 ```
 ### Summary of Datasets
-Here we see 'NA' values with `ResidualSugar`, `Chlorides`, `FreeSulfurDioxide`, `TotalSulfurDioxide`, `pH`, `Sulphates`, `Alcohol` and `STARS`. Later we'll impute each of these missing values.
+In this dataset, we have identified missing values in several variables, including `ResidualSugar`, `Chlorides`, `FreeSulfurDioxide`, `TotalSulfurDioxide`, `pH`, `Sulphates`, `Alcohol`, and `STARS`. Additionally, extreme values were noted in certain variables, such as `FixedAcidity`, which exceeds realistic limits for most wines (over 16 g/L), and `FreeSulfurDioxide` and `TotalSulfurDioxide`, which are higher than the regulatory thresholds of 350 mg/L in the US. These extreme values should be replaced with `NA`, and imputation can later be performed using methods like MICE (PPM), using other related variables to fill in missing data. For extreme values in `ResidualSugar`, `Density`, and `Alcohol`, we will retain them as outliers, since specialty wines (like sweet wines, Madeira or Sherry Wines, fortified wines, dessert wines, and Tokaji Essencia.) can justify these higher levels. For imputing missing values in variables like `pH`, `Sulphates`, `Alcohol`, `ResidualSugar`, and `Chlorides`, we may choose to impute based on correlations with other variables, using techniques like MICE (PPM).
 
 ```{r, echo=FALSE}
 #| fig-height: 3

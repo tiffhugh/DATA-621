@@ -69,9 +69,57 @@ First, we clean the data by removing leading hyphens (-) from numeric values, as
 ```{r, echo=FALSE}
 # clean the values in our variables by removing hyphens
 wine_training_data <- wine_training_data %>% 
-  mutate(across(everything(), ~gsub("\\-","", .x)))
+  mutate(across(-LabelAppeal, ~gsub("-", "", .x)))
 glimpse(wine_training_data)
 
 wine_evaluation_data <- wine_evaluation_data %>%
-  mutate(across(everything(), ~gsub("\\-", "", .x)))
+  mutate(across(-LabelAppeal, ~gsub("-", "", .x)))
+```
+Now that we have removed unnecessary characters in our values, let's review our distinct values.
+```{r, echo=FALSE}
+# check distinct values for all columns
+wine_training_data %>% summarise(across(everything(), ~n_distinct(.)))
+
+# check unique values in possibly ordinal columns
+wine_training_data %>% 
+  distinct(LabelAppeal, STARS) %>% 
+  map(~unique(.))
+```
+As we can see, 'NA' is present for the `STARS` column. Later we'll impute those with values using "polr" from the MICE package, considering it's a ordinal categorical column.
+
+Now, let's proceed with converting our columns to the appropriate data types, such as numeric, or ordinal variables:
+Convert to numeric variables: `TARGET`, `FixedAcidity`, `VolatileAcidity`, `CitricAcid`, `ResidualSugar`, `Chlorides`, `FreeSulfurDioxide`, `TotalSulfurDioxide`, `Density`, `pH`, `Sulphates`, `Alcohol`, `AcidIndex`
+Convert to ordinal variables: `STARS`, `LabelAppeal`
+```{r, echo=FALSE}
+wine_training_data <- wine_training_data %>% 
+  mutate(
+    # convert all numeric variables
+    across(c(TARGET, FixedAcidity, VolatileAcidity, CitricAcid, 
+             ResidualSugar, Chlorides, FreeSulfurDioxide, TotalSulfurDioxide, 
+             Density, pH, Sulphates, Alcohol, AcidIndex), as.numeric),
+    # convert all ordinal variables
+    across(c(STARS, LabelAppeal), as.ordered)
+  )
+
+glimpse(wine_training_data)
+
+# do the same for evaluation data
+wine_evaluation_data <- wine_evaluation_data %>% 
+  mutate(
+    # convert all numeric variables
+    across(c(TARGET, FixedAcidity, VolatileAcidity, CitricAcid, 
+             ResidualSugar, Chlorides, FreeSulfurDioxide, TotalSulfurDioxide, 
+             Density, pH, Sulphates, Alcohol, AcidIndex), as.numeric),
+    # convert all ordinal variables
+    across(c(STARS, LabelAppeal), as.ordered)
+  )
+```
+### Summary of Datasets
+Here we see 'NA' values with `ResidualSugar`, `Chlorides`, `FreeSulfurDioxide`, `TotalSulfurDioxide`, `pH`, `Sulphates`, `Alcohol` and `STARS`. Later we'll impute each of these missing values.
+
+```{r, echo=FALSE}
+#| fig-height: 3
+#| fig-width: 8
+cat("Summary of training data: \n")
+summary(wine_training_data)
 ```

@@ -169,6 +169,7 @@ Threshold of `FreeSulfurDioxide`: 350 mg/L
 Threshold of `TotalSulfurDioxide`: 350 mg/L
 
 ```{r, echo=FALSE}
+
 wine_training_data <- wine_training_data %>%
   mutate(
     FixedAcidity = ifelse(FixedAcidity > 16, NA, FixedAcidity),
@@ -184,4 +185,39 @@ wine_evaluation_data <- wine_evaluation_data %>%
     FreeSulfurDioxide = ifelse(FreeSulfurDioxide > 350, NA, FreeSulfurDioxide),
     TotalSulfurDioxide = ifelse(TotalSulfurDioxide > 350, NA, TotalSulfurDioxide)
   )
+```
+### Imputation of Variables
+For the continuous variables, we will use Predictive Mean Matching (PMM) from the mice package, as it preserves the original data distribution and handles non-normality and skewness effectively. For the ordinal variable `STARS`, we will use the polr method, which is appropriate for ordered categorical data under the proportional odds assumption. We will set the number of imputations (m = 5), a common and computationally efficient choice for large datasets, and run the algorithm for a maximum of 10 iterations (maxit = 10) to ensure convergence while capturing variability in the imputed values.
+
+```{r, echo=FALSE, message=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+# mice imputation
+wine_training_data = wine_training_data
+method_vector_train <- c("", "pmm", "", "", "pmm",
+                   "pmm", "pmm", "pmm", "", "pmm",
+                   "pmm", "pmm", "", "", "polr"
+                   )
+mice_imp_train <- mice(wine_training_data, m = 5, 
+                       method = method_vector_train)
+summary(wine_training_data$FixedAcidity)
+mice_imp_train$imp$FixedAcidity
+clean_wine_training_data <- complete(mice_imp_train, 3)
+summary(clean_wine_training_data)
+plot_histogram(clean_wine_training_data)
+
+# do the same for evaluation data
+wine_evaluation_data = wine_evaluation_data
+method_vector_train <- c("", "pmm", "", "", "pmm",
+                   "pmm", "pmm", "pmm", "", "pmm",
+                   "pmm", "", "", "", "polr"
+                   )
+mice_imp_train <- mice(wine_evaluation_data, m = 5, 
+                       method = method_vector_train)
+summary(wine_evaluation_data$FixedAcidity)
+mice_imp_train$imp$FixedAcidity
+wine_evaluation_data <- complete(mice_imp_train, 3)
+
+mice_imp_train <- mice(wine_training_data, m = 5, method = method_vector_train)
+
 ```

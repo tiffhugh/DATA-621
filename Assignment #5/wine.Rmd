@@ -160,3 +160,29 @@ From the resulting graphs, we observe that `TARGET` and `STARS_NAs` are strongly
 Additionally, we note a correlation between `TARGET` and `STARS_3`, but the p-value is 0.377, indicating no statistically significant relationship, so it's not a concern for our analysis.
 
 With these insights, we’re ready to move forward with the data preparation phase.
+
+# **Data Preparation**
+### Replace Extreme Variables With NA
+First, let's replace the extreme values from the certain variables that we have:
+Threshold of `FixedAcidity`: 16 g/L
+Threshold of `FreeSulfurDioxide`: 350 mg/L
+Threshold of `TotalSulfurDioxide`: 350 mg/L
+
+```{r, echo=FALSE}
+# Assuming your data frame is named df
+wine_training_data <- wine_training_data %>%
+  mutate(
+    FixedAcidity = ifelse(FixedAcidity > 16, NA, FixedAcidity),
+    FreeSulfurDioxide = ifelse(FreeSulfurDioxide > 350, NA, FreeSulfurDioxide),
+    TotalSulfurDioxide = ifelse(TotalSulfurDioxide > 350, NA, TotalSulfurDioxide)
+  )
+
+summary(wine_training_data)
+
+wine_evaluation_data <- wine_evaluation_data %>%
+  mutate(
+    FixedAcidity = ifelse(FixedAcidity > 16, NA, FixedAcidity),
+    FreeSulfurDioxide = ifelse(FreeSulfurDioxide > 350, NA, FreeSulfurDioxide),
+    TotalSulfurDioxide = ifelse(TotalSulfurDioxide > 350, NA, TotalSulfurDioxide)
+  )
+```

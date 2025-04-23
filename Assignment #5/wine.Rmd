@@ -169,7 +169,6 @@ Threshold of `FreeSulfurDioxide`: 350 mg/L
 Threshold of `TotalSulfurDioxide`: 350 mg/L
 
 ```{r, echo=FALSE}
-# Assuming your data frame is named df
 wine_training_data <- wine_training_data %>%
   mutate(
     FixedAcidity = ifelse(FixedAcidity > 16, NA, FixedAcidity),

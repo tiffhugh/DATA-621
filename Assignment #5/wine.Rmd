@@ -187,37 +187,44 @@ wine_evaluation_data <- wine_evaluation_data %>%
   )
 ```
 ### Imputation of Variables
-For the continuous variables, we will use Predictive Mean Matching (PMM) from the mice package, as it preserves the original data distribution and handles non-normality and skewness effectively. For the ordinal variable `STARS`, we will use the polr method, which is appropriate for ordered categorical data under the proportional odds assumption. We will set the number of imputations (m = 5), a common and computationally efficient choice for large datasets, and run the algorithm for a maximum of 10 iterations (maxit = 10) to ensure convergence while capturing variability in the imputed values.
+For the continuous variables, we employed Predictive Mean Matching (PMM) using the mice package. PMM is particularly well-suited for continuous data as it preserves the original data distribution and effectively handles non-normality and skewed distributions. This makes it ideal when maintaining the natural variability of the data is important.
 
+For the ordinal variable `STARS`, we used the polr method (proportional odds logistic regression), which is appropriate for ordered categorical data and assumes the proportional odds assumption—a reasonable assumption for many rating-based variables.
+
+We set the number of imputations to m = 5, which is a commonly used and computationally efficient choice for large datasets. The algorithm was run for maxit = 10 iterations to promote convergence and adequately capture the uncertainty inherent in the imputed values.
+
+We selected the third imputation iteration for `FixedAcidity` to fill in its missing values, as this iteration produced imputed values reasonably close to the variable's mean. This choice aligns with our goal of maintaining realistic data patterns without overfitting to a single distributional characteristic.
+
+After imputation, the distributions of most variables remained consistent with their original shapes. However, noticeable shifts were observed in `FixedAcidity` and `TotalSulfurDioxide`, which became approximately normally distributed. This transformation is likely due to the removal of extreme values prior to imputation, and the smoothing effect of the PMM method when filling in missing values. These shifts are acceptable given that the extreme values were likely outliers, and their removal followed by imputation helped stabilize the overall distribution.
 ```{r, echo=FALSE, message=FALSE}
 #| fig-height: 5
 #| fig-width: 10
 # mice imputation
-wine_training_data = wine_training_data
+input_training = wine_training_data
 method_vector_train <- c("", "pmm", "", "", "pmm",
                    "pmm", "pmm", "pmm", "", "pmm",
                    "pmm", "pmm", "", "", "polr"
                    )
-mice_imp_train <- mice(wine_training_data, m = 5, 
+mice_imp_train = mice(input_training, m = 5, 
                        method = method_vector_train)
-summary(wine_training_data$FixedAcidity)
+summary(input_training$FixedAcidity)
 mice_imp_train$imp$FixedAcidity
 clean_wine_training_data <- complete(mice_imp_train, 3)
 summary(clean_wine_training_data)
 plot_histogram(clean_wine_training_data)
+plot_density(clean_wine_training_data)
+plot_boxplot(clean_wine_training_data, by="TARGET")
+plot_bar(clean_wine_training_data)
 
 # do the same for evaluation data
-wine_evaluation_data = wine_evaluation_data
-method_vector_train <- c("", "pmm", "", "", "pmm",
+input_evaluation = wine_evaluation_data
+method_vector_eval <- c("", "pmm", "", "", "pmm",
                    "pmm", "pmm", "pmm", "", "pmm",
                    "pmm", "", "", "", "polr"
                    )
-mice_imp_train <- mice(wine_evaluation_data, m = 5, 
-                       method = method_vector_train)
-summary(wine_evaluation_data$FixedAcidity)
-mice_imp_train$imp$FixedAcidity
-wine_evaluation_data <- complete(mice_imp_train, 3)
-
-mice_imp_train <- mice(wine_training_data, m = 5, method = method_vector_train)
-
+mice_imp_eval <- mice(input_evaluation, m = 5, 
+                       method = method_vector_eval)
+mice_imp_eval$imp$FixedAcidity
+clean_wine_evaluation_data <- complete(mice_imp_eval, 3)
+summary(clean_wine_evaluation_data)
 ```

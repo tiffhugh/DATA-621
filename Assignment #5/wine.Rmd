@@ -115,11 +115,48 @@ wine_evaluation_data <- wine_evaluation_data %>%
   )
 ```
 ### Summary of Datasets
-In this dataset, we have identified missing values in several variables, including `ResidualSugar`, `Chlorides`, `FreeSulfurDioxide`, `TotalSulfurDioxide`, `pH`, `Sulphates`, `Alcohol`, and `STARS`. Additionally, extreme values were noted in certain variables, such as `FixedAcidity`, which exceeds realistic limits for most wines (over 16 g/L), and `FreeSulfurDioxide` and `TotalSulfurDioxide`, which are higher than the regulatory thresholds of 350 mg/L in the US. These extreme values should be replaced with `NA`, and imputation can later be performed using methods like MICE (PPM), using other related variables to fill in missing data. For extreme values in `ResidualSugar`, `Density`, and `Alcohol`, we will retain them as outliers, since specialty wines (like sweet wines, Madeira or Sherry Wines, fortified wines, dessert wines, and Tokaji Essencia.) can justify these higher levels. For imputing missing values in variables like `pH`, `Sulphates`, `Alcohol`, `ResidualSugar`, and `Chlorides`, we may choose to impute based on correlations with other variables, using techniques like MICE (PPM).
+In our dataset, missing values (NA) appear in variables such as `ResidualSugar`, `Chlorides`, `FreeSulfurDioxide`, `TotalSulfurDioxide`, `pH`, `Sulphates`, `Alcohol`, and `STARS`. We plan to address these through appropriate imputation techniques, including median imputation, Predictive Mean Matching (PPM) for continuous variables, or proportional odds logistic regression (polr) via the `mice` package for ordinal categorical variables like STARS, depending on variable distribution.
 
+From our summary, some extreme values also warrant attention. For instance, `FixedAcidity` values greater than 16 g/L are chemically improbable, as white wines typically range between 4–10 g/L and red wines 4–16 g/L. For `FreeSulfurDioxide`, values exceeding 350 mg/L surpass US regulatory limits, and EU limits are even lower (~150 mg/L). Given the lack of country-specific data, we’ll apply US thresholds. Similar logic applies to `TotalSulfurDioxide`.
+
+We will flag values that exceed these thresholds, treat them as missing, and impute accordingly to reduce bias and ensure realistic modeling.
+
+However, for variables like `ResidualSugar`, `Density`, and `Alcohol`, we’ll retain outliers—such as those seen in sweet and fortified wines (e.g., Tokaji, Sherry)—as they represent valid cases. We’ll reassess how best to impute missing values in variables such as `pH`, `Sulphates`, `Alcohol`, `ResidualSugar`, and `Chlorides`.
 ```{r, echo=FALSE}
 #| fig-height: 3
 #| fig-width: 8
 cat("Summary of training data: \n")
 summary(wine_training_data)
 ```
+### Plots for Visual Assesment
+Below we can see that most of our variables are skewed to the right, only `ph` and `Density` are somewhat normally distributed.
+```{r, echo=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+cat("Histogram of training data: \n")
+plot_histogram(wine_training_data)
+cat("Density Plot of training data: \n")
+plot_density(wine_training_data)
+cat("Boxplot of training data: \n")
+plot_boxplot(wine_training_data, by='TARGET')
+cat("Barplot of training data: \n")
+plot_bar(wine_training_data)
+```
+### Visual Correlation of Variables
+```{r, echo=FALSE, message=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+corr_cross(wine_training_data, 
+           method = "spearman", max_pvalue = 0.05, top = 20)
+
+corr_cross(wine_training_data, 
+           method = "spearman", max_pvalue = 0.05, 
+           contains = c('TARGET'))
+```
+To visualize correlations, we use the `corr_cross()` function from the `lares` package, which allows for an easy comparison across variables. We set the method to Spearman because most of our data is not normally distributed.
+
+From the resulting graphs, we observe that `TARGET` and `STARS_NAs` are strongly negatively correlated, though, as mentioned earlier, we will impute missing values for `STARS` later on.
+
+Additionally, we note a correlation between `TARGET` and `STARS_3`, but the p-value is 0.377, indicating no statistically significant relationship, so it's not a concern for our analysis.
+
+With these insights, we’re ready to move forward with the data preparation phase.

@@ -220,11 +220,9 @@ plot_bar(clean_wine_training_data)
 input_evaluation = wine_evaluation_data
 method_vector_eval <- c("", "pmm", "", "", "pmm",
                    "pmm", "pmm", "pmm", "", "pmm",
-                   "pmm", "", "", "", "polr"
+                   "pmm", "pmm", "", "", "polr"
                    )
 mice_imp_eval <- mice(input_evaluation, m = 5, 
                        method = method_vector_eval)
-mice_imp_eval$imp$FixedAcidity
 clean_wine_evaluation_data <- complete(mice_imp_eval, 3)
-summary(clean_wine_evaluation_data)
 ```

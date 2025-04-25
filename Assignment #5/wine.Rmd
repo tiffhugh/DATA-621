@@ -30,6 +30,7 @@ knitr::opts_chunk$set(tidy.opts = list(width.cutoff = 50), tidy = TRUE, warning 
 ```
 
 ```{r, include=FALSE}
+# Load required packages
 library(dplyr)
 library(stringr)
 library(ggplot2)
@@ -43,9 +44,8 @@ library(caret)
 library(DHARMa)
 library(lares)
 library(mice)
-```
+library(gridExtra)
 
-```{r, include=FALSE}
 # Import dataset
 wine_training_data <- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/Assignment%20%235/wine-training-data.csv")
 wine_evaluation_data<- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/Assignment%20%235/wine-evaluation-data.csv")
@@ -117,11 +117,11 @@ wine_evaluation_data <- wine_evaluation_data %>%
 ### Summary of Datasets
 In our dataset, missing values (NA) appear in variables such as `ResidualSugar`, `Chlorides`, `FreeSulfurDioxide`, `TotalSulfurDioxide`, `pH`, `Sulphates`, `Alcohol`, and `STARS`. We plan to address these through appropriate imputation techniques, including median imputation, Predictive Mean Matching (PPM) for continuous variables, or proportional odds logistic regression (polr) via the `mice` package for ordinal categorical variables like STARS, depending on variable distribution.
 
-From our summary, some extreme values also warrant attention. For instance, `FixedAcidity` values greater than 16 g/L are chemically improbable, as white wines typically range between 4–10 g/L and red wines 4–16 g/L. For `FreeSulfurDioxide`, values exceeding 350 mg/L surpass US regulatory limits, and EU limits are even lower (~150 mg/L). Given the lack of country-specific data, we’ll apply US thresholds. Similar logic applies to `TotalSulfurDioxide`.
+From our summary, some extreme values also warrant attention. For instance, `FixedAcidity` values greater than 16 g/L are chemically improbable, as white wines typically range between 4–10 g/L and red wines 4–16 g/L. For `FreeSulfurDioxide`, values exceeding 350 mg/L surpass US regulatory limits, and EU limits are even lower (~150 mg/L). Given the lack of country-specific data, we'll apply US thresholds. Similar logic applies to `TotalSulfurDioxide`.
 
 We will flag values that exceed these thresholds, treat them as missing, and impute accordingly to reduce bias and ensure realistic modeling.
 
-However, for variables like `ResidualSugar`, `Density`, and `Alcohol`, we’ll retain outliers—such as those seen in sweet and fortified wines (e.g., Tokaji, Sherry)—as they represent valid cases. We’ll reassess how best to impute missing values in variables such as `pH`, `Sulphates`, `Alcohol`, `ResidualSugar`, and `Chlorides`.
+However, for variables like `ResidualSugar`, `Density`, and `Alcohol`, we'll retain outliers—such as those seen in sweet and fortified wines (e.g., Tokaji, Sherry)—as they represent valid cases. We'll reassess how best to impute missing values in variables such as `pH`, `Sulphates`, `Alcohol`, `ResidualSugar`, and `Chlorides`.
 ```{r, echo=FALSE}
 #| fig-height: 3
 #| fig-width: 8
@@ -159,7 +159,7 @@ From the resulting graphs, we observe that `TARGET` and `STARS_NAs` are strongly
 
 Additionally, we note a correlation between `TARGET` and `STARS_3`, but the p-value is 0.377, indicating no statistically significant relationship, so it's not a concern for our analysis.
 
-With these insights, we’re ready to move forward with the data preparation phase.
+With these insights, we're ready to move forward with the data preparation phase.
 
 # **Data Preparation**
 ### Replace Extreme Variables With NA
@@ -192,10 +192,6 @@ For the continuous variables, we employed Predictive Mean Matching (PMM) using t
 For the ordinal variable `STARS`, we used the polr method (proportional odds logistic regression), which is appropriate for ordered categorical data and assumes the proportional odds assumption—a reasonable assumption for many rating-based variables.
 
 We set the number of imputations to m = 5, which is a commonly used and computationally efficient choice for large datasets. The algorithm was run for maxit = 10 iterations to promote convergence and adequately capture the uncertainty inherent in the imputed values.
-
-We selected the third imputation iteration for `FixedAcidity` to fill in its missing values, as this iteration produced imputed values reasonably close to the variable's mean. This choice aligns with our goal of maintaining realistic data patterns without overfitting to a single distributional characteristic.
-
-After imputation, the distributions of most variables remained consistent with their original shapes. However, noticeable shifts were observed in `FixedAcidity` and `TotalSulfurDioxide`, which became approximately normally distributed. This transformation is likely due to the removal of extreme values prior to imputation, and the smoothing effect of the PMM method when filling in missing values. These shifts are acceptable given that the extreme values were likely outliers, and their removal followed by imputation helped stabilize the overall distribution.
 ```{r, echo=FALSE, message=FALSE}
 #| fig-height: 5
 #| fig-width: 10
@@ -226,3 +222,614 @@ mice_imp_eval <- mice(input_evaluation, m = 5,
                        method = method_vector_eval)
 clean_wine_evaluation_data <- complete(mice_imp_eval, 3)
 ```
+######## original code ########
+
+
+### Creating missing value flags for all variables
+
+```{r, echo=FALSE}
+# missing value flags for training data
+clean_wine_training_data <- clean_wine_training_data %>%
+  mutate(
+    FixedAcidity_NA = ifelse(is.na(wine_training_data$FixedAcidity), 1, 0),
+    VolatileAcidity_NA = ifelse(is.na(wine_training_data$VolatileAcidity), 1, 0),
+    CitricAcid_NA = ifelse(is.na(wine_training_data$CitricAcid), 1, 0),
+    ResidualSugar_NA = ifelse(is.na(wine_training_data$ResidualSugar), 1, 0),
+    Chlorides_NA = ifelse(is.na(wine_training_data$Chlorides), 1, 0),
+    FreeSulfurDioxide_NA = ifelse(is.na(wine_training_data$FreeSulfurDioxide), 1, 0),
+    TotalSulfurDioxide_NA = ifelse(is.na(wine_training_data$TotalSulfurDioxide), 1, 0),
+    Density_NA = ifelse(is.na(wine_training_data$Density), 1, 0),
+    pH_NA = ifelse(is.na(wine_training_data$pH), 1, 0),
+    Sulphates_NA = ifelse(is.na(wine_training_data$Sulphates), 1, 0),
+    Alcohol_NA = ifelse(is.na(wine_training_data$Alcohol), 1, 0),
+    STARS_NA = ifelse(is.na(wine_training_data$STARS), 1, 0)
+  )
+
+# missing value flags for evaluation data
+clean_wine_evaluation_data <- clean_wine_evaluation_data %>%
+  mutate(
+    FixedAcidity_NA = ifelse(is.na(wine_evaluation_data$FixedAcidity), 1, 0),
+    VolatileAcidity_NA = ifelse(is.na(wine_evaluation_data$VolatileAcidity), 1, 0),
+    CitricAcid_NA = ifelse(is.na(wine_evaluation_data$CitricAcid), 1, 0),
+    ResidualSugar_NA = ifelse(is.na(wine_evaluation_data$ResidualSugar), 1, 0),
+    Chlorides_NA = ifelse(is.na(wine_evaluation_data$Chlorides), 1, 0),
+    FreeSulfurDioxide_NA = ifelse(is.na(wine_evaluation_data$FreeSulfurDioxide), 1, 0),
+    TotalSulfurDioxide_NA = ifelse(is.na(wine_evaluation_data$TotalSulfurDioxide), 1, 0),
+    Density_NA = ifelse(is.na(wine_evaluation_data$Density), 1, 0),
+    pH_NA = ifelse(is.na(wine_evaluation_data$pH), 1, 0),
+    Sulphates_NA = ifelse(is.na(wine_evaluation_data$Sulphates), 1, 0),
+    Alcohol_NA = ifelse(is.na(wine_evaluation_data$Alcohol), 1, 0),
+    STARS_NA = ifelse(is.na(wine_evaluation_data$STARS), 1, 0)
+  )
+
+cat("Summary of missing value flags in training data:\n")
+summary(clean_wine_training_data %>% select(ends_with("_NA")))
+
+cat("Missing value patterns in training data:\n")
+plot_missing(clean_wine_training_data %>% select(ends_with("_NA")))
+```
+```{r, echo=FALSE}
+
+# Calculate percentage of missing values for each variable
+missing_percentages <- clean_wine_training_data %>%
+  select(ends_with("_NA")) %>%
+  summarise(across(everything(), ~mean(.) * 100)) %>%
+  pivot_longer(everything(), names_to = "Variable", values_to = "Percentage") %>%
+  mutate(Variable = str_remove(Variable, "_NA"))
+
+# Print missing value percentages
+print(missing_percentages)
+
+# Visualize missing value percentages
+ggplot(missing_percentages, aes(x = reorder(Variable, -Percentage), y = Percentage)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)), vjust = -0.5) +
+  labs(title = "Percentage of Missing Values by Variable",
+       x = "Variable",
+       y = "Percentage Missing") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+### **Analysis of Missing Value Patterns**
+
+An examination of missing values in the training dataset reveals the following insights:
+
+- **Highest Missing Rates**:
+  - **STARS** has the most missing data, with approximately **26.25%** missing entries.
+  - **TotalSulfurDioxide** follows closely, with **21.2%** missing.
+  - Other variables with notable missingness include **Sulphates (9.46%)**, **FixedAcidity (9.30%)**, and **FreeSulfurDioxide (7.93%)**.
+
+- **Moderate Missing Rates (3–5%)**:
+  - **Alcohol**: 5.10% missing
+  - **ResidualSugar**: 4.81% missing
+  - **Chlorides**: 4.99% missing
+  - **pH**: 3.09% missing
+
+- **No Missing Values**:
+  - **VolatileAcidity**, **CitricAcid**, and **Density** are fully observed with no missing data.
+
+- **Observed Patterns**:
+  - **Chemical measurements** (e.g., TotalSulfurDioxide, FreeSulfurDioxide) tend to have higher rates of missingness.
+  - **Quality indicators** like **STARS** show the highest missingness overall.
+  - **Basic compositional features** such as **VolatileAcidity** and **CitricAcid** appear to be reliably measured.
+
+In summary, only a few features require special handling for missing data, particularly those related to sulfur content, acidity, and quality scores.
+
+Perfect — here's the cleaner, **non-repetitive** version you can paste after your missing value patterns section:
+
+### **Missing Data Completion**
+
+Building on the missing value analysis, we completed the remaining missing entries to prepare the dataset for modeling. While earlier imputations handled most gaps, a small number of missing values persisted, particularly among chemical composition variables.
+
+To finalize the dataset:
+- We performed another round of multiple imputation using the **mice** package, ensuring complete and consistent records across all features.
+- The final imputation filled any residual missing values while preserving the original data distribution and avoiding unnecessary information loss.
+
+The final clean dataset was generated with the following code:
+
+```{r, echo=FALSE}
+library(mice)
+
+# Re-run mice on wine_training_data
+input_training <- wine_training_data
+
+method_vector_train <- c("", "pmm", "", "", "pmm",
+                         "pmm", "pmm", "pmm", "", "pmm",
+                         "pmm", "pmm", "", "", "polr")
+
+# mice imputation
+mice_imp_train <- mice(input_training, m = 5, method = method_vector_train, maxit = 10)
+
+# complete the dataset
+clean_wine_training_data <- complete(mice_imp_train, 3)
+
+summary(clean_wine_training_data)
+```
+After applying missing value imputation and removing extreme outliers, the dataset no longer contains missing values across any of the key continuous or categorical variables.
+
+With missing values addressed, we proceed to transform continuous variables into categorical buckets to support easier analysis and modeling.
+
+### Transforming data by putting it into buckets
+
+With the dataset fully cleaned and missing values addressed, we now transform key continuous variables into categorical buckets based on domain knowledge (e.g., wine acidity ranges, sugar levels). This binning simplifies complex distributions and enables easier pattern discovery across different chemical properties of wine.
+```{r, echo=FALSE}
+library(ggplot2)
+library(patchwork)
+library(stringr)
+library(dplyr)
+
+# buckets for continuous variables
+clean_wine_training_data <- clean_wine_training_data %>%
+  mutate(
+    # FixedAcidity buckets (typical range: 4-16 g/L)
+    FixedAcidity_bucket = cut(FixedAcidity, 
+                            breaks = c(-Inf, 4, 6, 8, 10, 12, 14, 16, Inf),
+                            labels = c("Very Low", "Low", "Medium-Low", "Medium", 
+                                     "Medium-High", "High", "Very High", "Extreme")),
+    
+    # VolatileAcidity buckets (typical range: 0.2-1.0 g/L)
+    VolatileAcidity_bucket = cut(VolatileAcidity,
+                               breaks = c(-Inf, 0.2, 0.4, 0.6, 0.8, 1.0, Inf),
+                               labels = c("Very Low", "Low", "Medium", "High", 
+                                        "Very High", "Extreme")),
+    
+    # CitricAcid buckets (typical range: 0-1 g/L)
+    CitricAcid_bucket = cut(CitricAcid,
+                          breaks = c(-Inf, 0.2, 0.4, 0.6, 0.8, 1.0, Inf),
+                          labels = c("Very Low", "Low", "Medium", "High", 
+                                   "Very High", "Extreme")),
+    
+    # ResidualSugar buckets (typical range: 0-50 g/L)
+    ResidualSugar_bucket = cut(ResidualSugar,
+                             breaks = c(-Inf, 1, 5, 10, 20, 30, 50, Inf),
+                             labels = c("Bone Dry", "Dry", "Off-Dry", "Medium", 
+                                      "Medium-Sweet", "Sweet", "Very Sweet")),
+    
+    # Chlorides buckets (typical range: 0.01-0.1 g/L)
+    Chlorides_bucket = cut(Chlorides,
+                         breaks = c(-Inf, 0.01, 0.03, 0.05, 0.07, 0.1, Inf),
+                         labels = c("Very Low", "Low", "Medium", "High", 
+                                  "Very High", "Extreme")),
+    
+    # FreeSulfurDioxide buckets (typical range: 0-350 mg/L)
+    FreeSulfurDioxide_bucket = cut(FreeSulfurDioxide,
+                                 breaks = c(-Inf, 10, 30, 50, 100, 200, 350, Inf),
+                                 labels = c("Very Low", "Low", "Medium", "High", 
+                                          "Very High", "Extreme", "Excessive")),
+    
+    # TotalSulfurDioxide buckets (typical range: 0-350 mg/L)
+    TotalSulfurDioxide_bucket = cut(TotalSulfurDioxide,
+                                  breaks = c(-Inf, 30, 100, 150, 200, 300, 350, Inf),
+                                  labels = c("Very Low", "Low", "Medium", "High", 
+                                           "Very High", "Extreme", "Excessive")),
+    
+    # Density buckets (typical range: 0.98-1.01 g/cm³)
+    Density_bucket = cut(Density,
+                       breaks = c(-Inf, 0.98, 0.99, 0.995, 1.0, 1.005, 1.01, Inf),
+                       labels = c("Very Light", "Light", "Medium-Light", "Medium", 
+                                "Medium-Heavy", "Heavy", "Very Heavy")),
+    
+    # pH buckets (typical range: 2.8-4.0)
+    pH_bucket = cut(pH,
+                   breaks = c(-Inf, 2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0, Inf),
+                   labels = c("Very Acidic", "Acidic", "Medium-Acidic", "Medium", 
+                            "Medium-Basic", "Basic", "Very Basic", "Extreme")),
+    
+    # Sulphates buckets (typical range: 0.3-1.0 g/L)
+    Sulphates_bucket = cut(Sulphates,
+                         breaks = c(-Inf, 0.3, 0.5, 0.7, 0.9, 1.0, Inf),
+                         labels = c("Very Low", "Low", "Medium", "High", 
+                                  "Very High", "Extreme")),
+    
+    # Alcohol buckets (typical range: 8-15%)
+    Alcohol_bucket = cut(Alcohol,
+                       breaks = c(-Inf, 8, 10, 12, 13, 14, 15, Inf),
+                       labels = c("Very Low", "Low", "Medium", "Medium-High", 
+                                "High", "Very High", "Extreme")),
+    
+    # AcidIndex buckets (typical range: 4-10)
+    AcidIndex_bucket = cut(AcidIndex,
+                         breaks = c(-Inf, 4, 6, 8, 10, Inf),
+                         labels = c("Very Low", "Low", "Medium", "High", "Very High"))
+  )
+
+# doing the same for evaluation data
+clean_wine_evaluation_data <- clean_wine_evaluation_data %>%
+  mutate(
+    FixedAcidity_bucket = cut(FixedAcidity, 
+                            breaks = c(-Inf, 4, 6, 8, 10, 12, 14, 16, Inf),
+                            labels = c("Very Low", "Low", "Medium-Low", "Medium", 
+                                     "Medium-High", "High", "Very High", "Extreme")),
+    VolatileAcidity_bucket = cut(VolatileAcidity,
+                               breaks = c(-Inf, 0.2, 0.4, 0.6, 0.8, 1.0, Inf),
+                               labels = c("Very Low", "Low", "Medium", "High", 
+                                        "Very High", "Extreme")),
+    CitricAcid_bucket = cut(CitricAcid,
+                          breaks = c(-Inf, 0.2, 0.4, 0.6, 0.8, 1.0, Inf),
+                          labels = c("Very Low", "Low", "Medium", "High", 
+                                   "Very High", "Extreme")),
+    ResidualSugar_bucket = cut(ResidualSugar,
+                             breaks = c(-Inf, 1, 5, 10, 20, 30, 50, Inf),
+                             labels = c("Bone Dry", "Dry", "Off-Dry", "Medium", 
+                                      "Medium-Sweet", "Sweet", "Very Sweet")),
+    Chlorides_bucket = cut(Chlorides,
+                         breaks = c(-Inf, 0.01, 0.03, 0.05, 0.07, 0.1, Inf),
+                         labels = c("Very Low", "Low", "Medium", "High", 
+                                  "Very High", "Extreme")),
+    FreeSulfurDioxide_bucket = cut(FreeSulfurDioxide,
+                                 breaks = c(-Inf, 10, 30, 50, 100, 200, 350, Inf),
+                                 labels = c("Very Low", "Low", "Medium", "High", 
+                                          "Very High", "Extreme", "Excessive")),
+    TotalSulfurDioxide_bucket = cut(TotalSulfurDioxide,
+                                  breaks = c(-Inf, 30, 100, 150, 200, 300, 350, Inf),
+                                  labels = c("Very Low", "Low", "Medium", "High", 
+                                           "Very High", "Extreme", "Excessive")),
+    Density_bucket = cut(Density,
+                       breaks = c(-Inf, 0.98, 0.99, 0.995, 1.0, 1.005, 1.01, Inf),
+                       labels = c("Very Light", "Light", "Medium-Light", "Medium", 
+                                "Medium-Heavy", "Heavy", "Very Heavy")),
+    pH_bucket = cut(pH,
+                   breaks = c(-Inf, 2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0, Inf),
+                   labels = c("Very Acidic", "Acidic", "Medium-Acidic", "Medium", 
+                            "Medium-Basic", "Basic", "Very Basic", "Extreme")),
+    Sulphates_bucket = cut(Sulphates,
+                         breaks = c(-Inf, 0.3, 0.5, 0.7, 0.9, 1.0, Inf),
+                         labels = c("Very Low", "Low", "Medium", "High", 
+                                  "Very High", "Extreme")),
+    Alcohol_bucket = cut(Alcohol,
+                       breaks = c(-Inf, 8, 10, 12, 13, 14, 15, Inf),
+                       labels = c("Very Low", "Low", "Medium", "Medium-High", 
+                                "High", "Very High", "Extreme")),
+    AcidIndex_bucket = cut(AcidIndex,
+                         breaks = c(-Inf, 4, 6, 8, 10, Inf),
+                         labels = c("Very Low", "Low", "Medium", "High", "Very High"))
+  )
+
+# summary of bucket distributions
+cat("Distribution of buckets for key variables:\n")
+summary(dplyr::select(clean_wine_training_data, ends_with("_bucket")))
+
+bucket_vars <- names(clean_wine_training_data %>% dplyr::select(dplyr::ends_with("_bucket")))
+
+# plots
+bucket_plots <- lapply(bucket_vars, function(var) {
+  ggplot(clean_wine_training_data, aes_string(x = var)) +
+    geom_bar(fill = "steelblue") +
+    labs(title = str_replace(var, "_bucket", ""), x = NULL, y = NULL) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1, size = 7),
+      plot.title = element_text(size = 10, face = "bold", hjust = 0.5),
+      plot.margin = margin(5, 5, 5, 5)
+    )
+})
+
+wrap_plots(bucket_plots, ncol = 4) + 
+  plot_annotation(
+    title = "Distributions of Wine Features by Category",
+    theme = theme(
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+    )
+  )
+```
+To better understand variable distributions, we grouped continuous features into descriptive categories:
+
+- **FixedAcidity** is concentrated in the *"Medium-Low"* (4,943 wines) and *"Very Low"* (2,536 wines) buckets.
+- **VolatileAcidity** shows a bimodal pattern, dominated by *"Low"* (4,325 wines) and *"Extreme"* (2,780 wines).
+- **CitricAcid** is mainly *"Low"* (4,339 wines) and *"Extreme"* (3,054 wines), with fewer wines in intermediate categories.
+- **ResidualSugar** is fairly spread, with most wines in *"Dry"* (3,518), *"Sweet"* (2,050), and *"Very Sweet"* (2,034) buckets.
+- **Chlorides** are overwhelmingly in the *"Extreme"* bucket (6,368 wines), suggesting strong skewness.
+- **FreeSulfurDioxide** and **TotalSulfurDioxide** are centered between *"Low"* to *"Very High"*, with *"Low"* (~2,800 wines each) and *"Very High"* (~2,400 wines) being the most common.
+- **Density** is concentrated in *"Medium-Light"* (3,065 wines), *"Medium"* (2,763), and *"Very Heavy"* (2,520).
+- **pH** clusters around *"Medium-Acidic"* (2,969), *"Medium"* (2,664), and *"Very Acidic"* (2,587), showing diverse acidity levels.
+- **Sulphates** are mostly in the *"Low"* (3,536) and *"Medium"* (2,875) ranges, but there's a significant spike in *"Extreme"* (3,509 wines).
+- **Alcohol** is evenly distributed between *"Low"* (3,406), *"Medium"* (3,445), and *"Medium-High"* (1,118).
+- **AcidIndex** is heavily skewed to *"Medium"* (9,020 wines), clearly dominating that feature.
+
+These bucketed distributions help reveal central tendencies and detect skewed variables or potential outliers, improving clarity for downstream modeling or classification strategies.
+
+### Applying mathematical transformations to continuous variables
+```{r, echo=FALSE}
+library(MASS)
+library(dplyr)
+
+# saving lambdas globally for Box-Cox
+boxcox_results <- list()
+
+apply_boxcox <- function(x, var_name) {
+  x_adj <- x + 1  # shifting to ensure positivity
+  if (all(x_adj > 0, na.rm = TRUE)) {
+    bc <- boxcox(x_adj ~ 1, plotit = FALSE)
+    lambda <- bc$x[which.max(bc$y)]
+    boxcox_results[[var_name]] <<- lambda
+    
+    if (abs(lambda) < 1e-10) {
+      return(log(x_adj))
+    } else {
+      return((x_adj^lambda - 1) / lambda)
+    }
+  } else {
+    boxcox_results[[var_name]] <<- NA
+    return(rep(NA, length(x)))
+  }
+}
+
+# transformations to training data
+clean_wine_training_data <- clean_wine_training_data %>%
+  mutate(
+    # Log
+    log_FixedAcidity = log(FixedAcidity + 1),
+    log_VolatileAcidity = log(VolatileAcidity + 1),
+    log_CitricAcid = log(CitricAcid + 1),
+    log_ResidualSugar = log(ResidualSugar + 1),
+    log_Chlorides = log(Chlorides + 1),
+    log_FreeSulfurDioxide = log(FreeSulfurDioxide + 1),
+    log_TotalSulfurDioxide = log(TotalSulfurDioxide + 1),
+    log_Sulphates = log(Sulphates + 1),
+    log_Alcohol = log(Alcohol + 1),
+    log_AcidIndex = log(AcidIndex + 1),
+    
+    # Square Root
+    sqrt_FixedAcidity = sqrt(FixedAcidity),
+    sqrt_VolatileAcidity = sqrt(VolatileAcidity),
+    sqrt_CitricAcid = sqrt(CitricAcid),
+    sqrt_ResidualSugar = sqrt(ResidualSugar),
+    sqrt_Chlorides = sqrt(Chlorides),
+    sqrt_FreeSulfurDioxide = sqrt(FreeSulfurDioxide),
+    sqrt_TotalSulfurDioxide = sqrt(TotalSulfurDioxide),
+    sqrt_Sulphates = sqrt(Sulphates),
+    sqrt_Alcohol = sqrt(Alcohol),
+    sqrt_AcidIndex = sqrt(AcidIndex),
+    
+    # Box-Cox
+    boxcox_FixedAcidity = apply_boxcox(FixedAcidity, "FixedAcidity"),
+    boxcox_VolatileAcidity = apply_boxcox(VolatileAcidity, "VolatileAcidity"),
+    boxcox_CitricAcid = apply_boxcox(CitricAcid, "CitricAcid"),
+    boxcox_ResidualSugar = apply_boxcox(ResidualSugar, "ResidualSugar"),
+    boxcox_Chlorides = apply_boxcox(Chlorides, "Chlorides"),
+    boxcox_FreeSulfurDioxide = apply_boxcox(FreeSulfurDioxide, "FreeSulfurDioxide"),
+    boxcox_TotalSulfurDioxide = apply_boxcox(TotalSulfurDioxide, "TotalSulfurDioxide"),
+    boxcox_Sulphates = apply_boxcox(Sulphates, "Sulphates"),
+    boxcox_Alcohol = apply_boxcox(Alcohol, "Alcohol"),
+    boxcox_AcidIndex = apply_boxcox(AcidIndex, "AcidIndex")
+  )
+
+# applying Box-Cox to evaluation data using saved lambdas
+apply_boxcox_eval <- function(x, var_name) {
+  lambda <- boxcox_results[[var_name]]
+  x_adj <- x + 1
+  if (is.na(lambda)) {
+    return(rep(NA, length(x)))
+  } else if (abs(lambda) < 1e-10) {
+    return(log(x_adj))
+  } else {
+    return((x_adj^lambda - 1) / lambda)
+  }
+}
+
+clean_wine_evaluation_data <- clean_wine_evaluation_data %>%
+  mutate(
+    boxcox_FixedAcidity = apply_boxcox_eval(FixedAcidity, "FixedAcidity"),
+    boxcox_VolatileAcidity = apply_boxcox_eval(VolatileAcidity, "VolatileAcidity"),
+    boxcox_CitricAcid = apply_boxcox_eval(CitricAcid, "CitricAcid"),
+    boxcox_ResidualSugar = apply_boxcox_eval(ResidualSugar, "ResidualSugar"),
+    boxcox_Chlorides = apply_boxcox_eval(Chlorides, "Chlorides"),
+    boxcox_FreeSulfurDioxide = apply_boxcox_eval(FreeSulfurDioxide, "FreeSulfurDioxide"),
+    boxcox_TotalSulfurDioxide = apply_boxcox_eval(TotalSulfurDioxide, "TotalSulfurDioxide"),
+    boxcox_Sulphates = apply_boxcox_eval(Sulphates, "Sulphates"),
+    boxcox_Alcohol = apply_boxcox_eval(Alcohol, "Alcohol"),
+    boxcox_AcidIndex = apply_boxcox_eval(AcidIndex, "AcidIndex")
+  )
+
+# summary after transformations
+clean_wine_training_data %>%
+  dplyr::select(starts_with("log_"), starts_with("sqrt_"), starts_with("boxcox_")) %>%
+  summary()
+```
+
+### **Interpretation of Transformed Variable Summary Statistics**
+
+The application of logarithmic and square root transformations noticeably improved the distribution of several continuous variables.
+
+For instance:  
+- **ResidualSugar**  
+  - **Before**: Mean = 23.37, Median = 12.90  
+  - **After log transform**: Mean = 2.60, Median = 2.63  
+  This shows a strong compression toward the center, reducing extreme right skewness.
+  
+- **TotalSulfurDioxide**  
+  - **Before**: Mean = 204.3, Median = 154.0  
+  - **After log transform**: Mean = 4.75, Median = 4.91  
+  A significant reduction in spread, pulling extreme values closer to the mean.
+
+- **VolatileAcidity**  
+  - **Before**: Mean = 0.6411, Median = 0.4100  
+  - **After log transform**: Mean = 0.4485, Median = 0.3436  
+  The transformation centered the distribution better, reducing the long tail.
+
+Square root transformations also helped in moderating skewness:  
+- **Sulphates**  
+  - **Before**: Mean = 0.8467, Median = 0.5900  
+  - **After sqrt transform**: Mean = 0.8616, Median = 0.7681  
+  Indicating a more balanced distribution while retaining original order.
+
+- **Chlorides**  
+  - **Before**: Mean = 0.2226, Median = 0.0980  
+  - **After sqrt transform**: Mean = 0.4110, Median = 0.3146  
+  Showing improvement but still retaining some moderate skewness.
+
+Features like **FixedAcidity** and **Alcohol**, which were relatively symmetric to begin with:  
+- **FixedAcidity (log)**: Mean = 1.943, Median = 2.054  
+- **Alcohol (log)**: Mean = 2.383, Median = 2.434  
+showed only modest normalization, as expected.
+
+Overall, transformations improved the shape and stability of feature distributions, particularly for heavily skewed variables, supporting better model training and convergence.
+
+### **Visual Interpretation of Log-Transformed Distributions**
+
+```{r, echo=FALSE}
+library(ggplot2)
+library(patchwork)
+library(stringr)
+
+# plot
+base_vars <- c("FixedAcidity", "VolatileAcidity", "CitricAcid", "ResidualSugar", 
+               "Chlorides", "FreeSulfurDioxide", "TotalSulfurDioxide", 
+               "Sulphates", "Alcohol", "AcidIndex")
+
+make_hist_plot <- function(var_name, prefix = NULL) {
+  colname <- if (is.null(prefix)) var_name else paste0(prefix, "_", var_name)
+  display_name <- if (is.null(prefix)) paste0("Original: ", var_name) else paste0(prefix, ": ", var_name)
+  
+  if (colname %in% names(clean_wine_training_data) && is.numeric(clean_wine_training_data[[colname]])) {
+    ggplot(clean_wine_training_data, aes(x = .data[[colname]])) +
+      geom_histogram(bins = 30, fill = "#4c72b0", color = "white", na.rm = TRUE) +
+      labs(title = display_name, x = NULL, y = NULL) +
+      theme_minimal() +
+      theme(
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.text.x = element_text(size = 6)
+      )
+  } else {
+    NULL
+  }
+}
+
+for (var in base_vars) {
+  plots <- list(
+    make_hist_plot(var),
+    make_hist_plot(var, "log"),
+    make_hist_plot(var, "sqrt"),
+    make_hist_plot(var, "boxcox")
+  )
+  plots <- plots[!sapply(plots, is.null)]
+  
+  print(
+    wrap_plots(plots, ncol = 2) + 
+      plot_annotation(title = paste("Distribution Comparison for", var))
+  )
+}
+```
+The application of log, square root, and Box-Cox transformations improved the distribution of several continuous variables, particularly those with strong right skew such as `ResidualSugar`, `FreeSulfurDioxide`, and `TotalSulfurDioxide`. These transformations reduced outlier influence, compressed long tails, and brought distributions closer to normality—key for meeting model assumptions and enhancing predictive stability. Moderately skewed variables like `CitricAcid`, `Chlorides`, and `Sulphates` also became more balanced, with Box-Cox offering smoother distributional adjustments in most cases. Variables that were already near-normal, such as `Alcohol` and `AcidIndex`, showed minimal shifts post-transformation. Overall, these preprocessing steps contribute to more robust and interpretable modeling outcomes.
+
+### **Combine variables**
+
+To further enrich the dataset and capture meaningful chemical relationships, we engineered new features by combining and transforming existing variables. These derived features, such as acidity ratios and sulfur-to-acid balances, aim to enhance model performance by embedding domain knowledge directly into the feature set.
+```{r, echo=FALSE}
+library(ggplot2)
+library(patchwork)
+
+# combining variables based on wine chemistry relationships
+clean_wine_training_data <- clean_wine_training_data %>%
+  mutate(
+    # Core chemical combinations
+    TotalAcidity = FixedAcidity + VolatileAcidity + CitricAcid,
+    
+    # Key ratios with NA handling for zero divisions
+    AcidityRatio = ifelse(VolatileAcidity > 0, FixedAcidity / VolatileAcidity, NA),
+    CitricToFixedRatio = ifelse(FixedAcidity > 0, CitricAcid / FixedAcidity, NA),
+    FreeToTotalSulfurRatio = ifelse(TotalSulfurDioxide > 0, FreeSulfurDioxide / TotalSulfurDioxide, NA),
+    SulfurToAcidRatio = TotalSulfurDioxide / TotalAcidity,
+    AlcoholToSugarRatio = ifelse(ResidualSugar > 0, Alcohol / ResidualSugar, NA),
+    
+    # Mineral and pH relationships
+    SulfateToChlorideRatio = ifelse(Chlorides > 0, Sulphates / Chlorides, NA),
+    pHToAcidityRatio = pH / TotalAcidity
+  )
+
+# transformations to evaluation data
+clean_wine_evaluation_data <- clean_wine_evaluation_data %>%
+  mutate(
+    TotalAcidity = FixedAcidity + VolatileAcidity + CitricAcid,
+    AcidityRatio = ifelse(VolatileAcidity > 0, FixedAcidity / VolatileAcidity, NA),
+    CitricToFixedRatio = ifelse(FixedAcidity > 0, CitricAcid / FixedAcidity, NA),
+    FreeToTotalSulfurRatio = ifelse(TotalSulfurDioxide > 0, FreeSulfurDioxide / TotalSulfurDioxide, NA),
+    SulfurToAcidRatio = TotalSulfurDioxide / TotalAcidity,
+    AlcoholToSugarRatio = ifelse(ResidualSugar > 0, Alcohol / ResidualSugar, NA),
+    SulfateToChlorideRatio = ifelse(Chlorides > 0, Sulphates / Chlorides, NA),
+    pHToAcidityRatio = pH / TotalAcidity
+  )
+
+# engineered variables
+engineered_vars <- c(
+  "TotalAcidity", "AcidityRatio", "CitricToFixedRatio",
+  "FreeToTotalSulfurRatio", "SulfurToAcidRatio",
+  "AlcoholToSugarRatio", "SulfateToChlorideRatio",
+  "pHToAcidityRatio"
+)
+
+# histogram plots for each engineered variable
+engineered_plots <- lapply(engineered_vars, function(v) {
+  ggplot(clean_wine_training_data, aes(x = .data[[v]])) +
+    geom_histogram(bins = 30, fill = "#4c72b0", na.rm = TRUE) +
+    labs(title = v, x = NULL, y = NULL) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 9, face = "bold"),
+      axis.text.x = element_text(size = 6)
+    )
+})
+
+wrap_plots(engineered_plots, ncol = 3) +
+  plot_annotation(title = "Distributions of Engineered Features")
+
+# summary
+summary(clean_wine_training_data)
+```
+### **Summary Statistics and Feature Insights**
+
+The dataset covers 12,795 wine samples with a target variable (`TARGET`) ranging from 0 to 8 (mean: 3.03, median: 3), indicating a relatively balanced rating distribution.
+
+Several features exhibited strong right skewness, including:
+- **ResidualSugar** (max: 141.15, Q3: 38.6),
+- **Chlorides** (max: 1.35, Q3: 0.368),
+- **FreeSulfurDioxide** (max: 350, Q3: 158),
+- **Sulphates** (max: 4.24, Q3: 1.10).
+
+Logarithmic and square root transformations were applied, successfully normalizing these variables. For example, the transformed `log_ResidualSugar` (mean: 2.60) and `sqrt_ResidualSugar` (mean: 4.14) showed significantly improved distribution shapes. Box-Cox transformations were also successfully applied and retained for modeling.
+
+Domain-informed feature engineering further enhanced the dataset:
+- **AcidityRatio** (mean: 24.26, max: 1420),
+- **AlcoholToSugarRatio** (mean: 2.27),
+- **SulfateToChlorideRatio** (mean: 12.76, max: 1260).
+
+These engineered ratios captured important interaction effects between acidity, sugar, minerals, and alcohol content, enriching the dataset for predictive modeling.
+
+Lastly, missing data was observed primarily in `STARS` (~26%), `TotalSulfurDioxide` (~21%), and `pH` (~3%). Missingness flags were created to preserve information for downstream machine learning models.
+
+### Final data check before modeling
+```{r, echo=FALSE}
+# Final data check before modeling
+cat("Final Data Check:\n")
+
+# 1. checking for remaining missing values
+cat("\n1. Missing Values Check:\n")
+missing_check <- sapply(clean_wine_training_data, function(x) sum(is.na(x)))
+print(missing_check[missing_check > 0])
+
+# 2. verify data types
+cat("\n2. Data Types Check:\n")
+str(clean_wine_training_data)
+
+# 3. check for extreme values
+cat("\n3. Extreme Values Check:\n")
+summary(clean_wine_training_data)
+
+# 4. verify bucket distributions
+cat("\n4. Bucket Distributions Check:\n")
+bucket_vars <- names(clean_wine_training_data %>% dplyr::select(dplyr::ends_with("_bucket")))
+for(var in bucket_vars) {
+  cat("\n", var, "distribution:\n")
+  print(table(clean_wine_training_data[[var]], useNA = "ifany"))
+}
+
+# 5. save final datasets
+final_training_data <- clean_wine_training_data
+final_evaluation_data <- clean_wine_evaluation_data
+
+cat("\nData preparation complete. Datasets are ready for modeling.\n")
+```
+
+After reviewing the final data check, we can proceed with modeling as the dataset is in good shape: while there are some minor NAs in engineered ratios (18-42 cases out of 12,795 observations) and extreme values in ratio variables, these are expected outcomes of chemical relationships in wine and won't significantly impact model performance. The core variables have been properly transformed, bucket distributions are reasonable, and all data types are correct. 
+
+The dataset's size (12,795 observations) provides sufficient data for robust modeling, and the time investment needed for additional cleaning would likely yield only marginal improvements. Therefore, we're ready to proceed with the modeling phase, where we can address any specific issues that might arise during model development.

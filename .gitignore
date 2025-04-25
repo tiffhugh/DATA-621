@@ -1,5 +1,7 @@
 # System files (macOS)
 **/.DS_Store
+**/.RData
+**/.Rhistory
 
 # HTML outputs
 **/*.html

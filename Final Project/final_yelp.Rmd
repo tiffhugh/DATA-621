@@ -1,0 +1,285 @@
+---
+title: "Final"
+author: "Bedros, Haig; Dela Cruz, Sandra; Hugh, Tiffany; Li, Yanyi"
+date: "`r Sys.Date()`"
+output: 
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+<style type="text/css">
+
+h1.title {
+  font-size: 26px;
+  color: Black;
+  text-align: center;
+}
+h4.author { 
+  font-size: 18px;
+  color: Black;
+  text-align: center;
+}
+h4.date {
+  font-size: 12px;
+  color: Black;
+  text-align: center;
+}
+</style>
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(tidy.opts = list(width.cutoff = 50), tidy = TRUE, warning = FALSE)
+```
+
+```{r, include=FALSE}
+# Install packages 
+#install.packages(c("tidyverse", "jsonlite", "janitor", "skimr","readr"))
+
+# Load packages
+library(tidyverse)
+library(jsonlite)
+library(janitor)
+library(skimr)
+library(readr)
+
+```
+
+
+Possible research question:
+What factors contribute to a restaurant's success as measured by Yelp ratings 
+and review counts?
+
+Sub-questions and Areas to Investigate:
+Impact of Operating Hours on Success: Does the length or flexibility of a
+restaurant’s operating hours influence its success in terms of Yelp ratings and
+review counts?
+
+Effect of Amenities on Restaurant Success: Do restaurants that offer specific 
+amenities, such as delivery, takeout, outdoor seating, or WiFi, have higher 
+ratings or more reviews?
+
+Success Across Different Restaurant Types: Are certain types of restaurants 
+(e.g., Italian, fast food, cafes) more likely to receive higher ratings and 
+more reviews than others?
+
+Geographical Influence on Restaurant Performance: Does a restaurant’s location 
+(city, state, postal code, or urban vs. suburban) influence its success on Yelp?
+
+
+```{r, include=FALSE}
+# Import dataset
+restaurants <- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/Final%20Project/restaurants.csv")
+colnames(restaurants)
+```
+
+The variables in the Yelp Restaurant Dataset: 
+- **Unnamed: 0**: Index column
+- **business_id**: Unique identifier for each business
+- **name**: Name of the restaurant
+- **address**: Street address
+- **city**: City where the restaurant is located
+- **state**: State abbreviation
+- **postal_code**: ZIP code
+- **latitude**: Geographic latitude
+- **longitude**: Geographic longitude
+- **stars**: Average star rating (1 to 5)
+- **review_count**: Number of reviews
+- **is_open**: Business status (1 = open, 0 = closed)
+- **attributes**: various business traits, such as:
+  - Service options (delivery, takeout, reservations, table service)
+  - Amenities (WiFi, parking, TV, wheelchair access)
+  - Atmosphere (noise level, ambience, kid-friendly, good for groups)
+  - Payment and access (credit cards, drive-thru, appointment only)
+- **categories**: Comma-separated business categories (e.g., "Restaurants, Food")
+- **hours**: Opening hours by day of the week
+
+# **Data Exploration**
+
+First, 'unnamed' and 'business_id' columns are removed from the dataset, since
+they are not meaningful.
+```{r, echo=FALSE}
+#remove index and business_id
+yelp <- restaurants %>%
+  clean_names() %>%
+  select(-x1, -business_id)
+
+# look at the structure of the df 
+head(yelp)
+glimpse(yelp)
+
+# summary of numeric variables
+summary(yelp)
+skimr::skim(yelp)
+
+#missing 
+colSums(is.na(yelp))
+```
+The Yelp dataset contains 64,629 observations and 13 variables. Before proceeding
+with analysis, several cleaning steps are required to ensure data quality and relevance:
+
+Handle Missing Data: The dataset includes missing values across key variables:
+
+address (738 missing)
+postal_code (26 missing)
+attributes (877 missing)
+hours (9,336 missing)
+
+Filter for Restaurants Only: Since this project focuses on restaurants, it's 
+important to verify that all entries are in fact restaurant listings. We will
+inspect the categories column to exclude any businesses unrelated to food service.
+
+Parse Nested Columns: The attributes and hours columns contain nested or JSON-like
+structures. These should be parsed and separated into distinct columns for easier
+analysis and interpretation.
+
+We begin by addressing the missing data. Rows with missing values for address,
+postal_code, attributes, and hours were removed, as these variables contain 
+essential, non-interchangeable information that cannot be reliably imputed. 
+Address and postal code correspond to specific real-world locations, and imputing 
+them could introduce fictional or misleading data. Likewise, attributes reflect 
+concrete business features (e.g., parking or delivery) that cannot be assumed 
+without risking inaccuracy.which we can’t accurately guess without misrepresenting 
+the restaurant. For hours, business times vary significantly across 
+locations—even within the same chain—so imputing them could affect time-based
+analysis, making imputation inappropriate.  In all these cases,removing
+incomplete entries helps maintain the accuracy, validity, and integrity of the dataset.
+```{r, echo=FALSE}
+# Handle missing data: For simplicity, we'll drop rows with critical missing values
+yelp_cleaned <- yelp %>%
+  filter(!is.na(address)) %>%
+  filter(!is.na(attributes)) %>%
+  filter(!is.na(hours)) %>%
+  filter(!is.na(postal_code))    
+```
+Next, we filtered out non-restaurant businesses such as pharmacies and grocery
+stores, since our project focuses specifically on restaurants. To do this, we 
+retained only entries where the categories field includes the term “Restaurants.”
+```{r, echo=FALSE}
+# Filter for restaurants only
+yelp_restaurants <- yelp_cleaned %>%
+  filter(str_detect(categories, regex("Restaurants", ignore_case = TRUE)))
+```
+The attributes and hours columns contain nested lists or JSON-like structures, 
+which need to be parsed into separate columns to make the data more accessible
+for analysis. This allows us to work with individual features (e.g., whether a
+business takes reservations or offers delivery) and understand business operating 
+hours without needing to manually interpret nested data.
+
+We clean and parse the hours column, which contains JSON-like strings representing
+each business’s weekly hours. We first convert these strings into structured lists, 
+handling any potential parsing issues. Then, using tidyr::hoist(), we extract the 
+opening hours for each day of the week into individual columns, making it easier
+to analyze and manipulate daily operating times.
+```{r, echo=FALSE}
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(purrr)
+library(jsonlite)
+
+
+parse_hours <- function(hours_str) {
+  #replacing single quotes with double quotes
+  hours_str <- gsub("'", '"', hours_str)
+  tryCatch(
+    fromJSON(hours_str, simplifyVector = TRUE),
+    error = function(e) NULL  # Handle any parsing errors
+  )
+}
+
+#  new column for parse hours 
+yelp_restaurants <- yelp_restaurants %>%
+  mutate(hours_parsed = map(hours, parse_hours))
+
+head(yelp_restaurants$hours_parsed)
+
+library(tidyr)
+
+# Hoist the parsed hours into separate columns for each day of the week
+yelp_restaurants <- yelp_restaurants %>%
+  hoist(hours_parsed, 
+        Monday = "Monday", 
+        Tuesday = "Tuesday", 
+        Wednesday = "Wednesday", 
+        Thursday = "Thursday", 
+        Friday = "Friday", 
+        Saturday = "Saturday", 
+        Sunday = "Sunday")
+
+head(yelp_restaurants)
+
+```
+To clean and organize the business hours data, we standardize the time format so 
+all entries follow a consistent "HH:MM" structure (e.g., "7:0" becomes "07:00").
+We treat "0:0-0:0" and missing values as indicators that the business is closed 
+on that day, and label them accordingly as "Closed." Then, we split each day's 
+hours into separate open and close columns, which makes it easier to analyze 
+opening and closing times across businesses. Finally, we remove the original 
+combined columns to streamline the dataset.
+```{r, echo=FALSE}
+library(dplyr)
+library(tidyr)
+library(stringr)
+
+# standardize the hours 
+clean_time <- function(x) {
+  ifelse(is.na(x) | x == "0:0-0:0", "Closed",
+         str_replace_all(x, "(\\d+):(\\d+)", function(m) {
+           time_parts <- str_match(m, "(\\d+):(\\d+)")
+           hour <- str_pad(time_parts[,2], 2, pad = "0")
+           min <- str_pad(time_parts[,3], 2, pad = "0")
+           paste0(hour, ":", min)
+         }))
+}
+
+yelp_processed <- yelp_restaurants %>%
+  mutate(across(c(Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday),
+                clean_time))
+
+# Separate open and close times
+for (day in c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")) {
+  yelp_processed <- yelp_processed %>%
+    mutate(
+      !!paste0(day, "_open") := ifelse(.data[[day]] == "Closed", "Closed", str_extract(.data[[day]], "^[^\\-]+")),
+      !!paste0(day, "_close") := ifelse(.data[[day]] == "Closed", "Closed", str_extract(.data[[day]], "[^\\-]+$"))
+    )
+}
+
+#drop original combined day columns and hours 
+yelp_processed <- yelp_processed %>%
+  select(-one_of(c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday", "hours")))
+```
+Parsing the attributes column is more tedious due to several inconsistencies in the data, which include elements resembling Python-like syntax. The primary challenges include inconsistent use of quotation marks, which need to be standardized to conform to JSON formatting rules. Additionally, there are embedded, nested JSON-like strings that require careful handling to ensure they are properly parsed. Moreover, the data includes Unicode representations (e.g., u'free'), which need to be cleaned and converted into valid string values for proper parsing.
+
+Furthermore, the presence of values such as None and NaN in the attributes column needs to be addressed. These values can be replaced with NULL or NA to ensure consistency in the dataset. You can achieve this replacement using the gsub() function in R.
+
+Once the data is standardized and cleaned, you can parse the string using the jsonlite package in R. This package allows you to convert the cleaned, formatted string into a list or data frame, making it easier to work with the parsed attributes in your analysis.
+
+```{r, echo=FALSE}
+#head(yelp_processed$attributes)
+library(jsonlite)
+
+# Sample data
+data <- "{'RestaurantsDelivery': 'False', 'OutdoorSeating': 'False', 'BusinessAcceptsCreditCards': 'False', 'BusinessParking': \"{'garage': False, 'street': True, 'validated': False, 'lot': False, 'valet': False}\", 'BikeParking': 'True', 'RestaurantsPriceRange2': '1', 'RestaurantsTakeOut': 'True', 'ByAppointmentOnly': 'False', 'WiFi': \"u'free'\", 'Alcohol': \"u'none'\", 'Caters': 'True'}"
+
+# Standardize the data
+clean_data <- gsub("False", "false", data)        # Replace False with false
+clean_data <- gsub("True", "true", clean_data)    # Replace True with true
+clean_data <- gsub("u'", "\"", clean_data)        # Replace u' with double quotes
+clean_data <- gsub("'", "\"", clean_data)         # Replace single quotes with double quotes
+clean_data <- gsub("None", "NULL", clean_data)    # Replace None with NULL
+clean_data <- gsub("NaN", "NA", clean_data)       # Replace NaN with NA
+
+# Parse the cleaned data
+parsed_data <- fromJSON(clean_data)
+
+# View parsed data
+parsed_data
+```
+```
+
+
+
+
+
+
+
+

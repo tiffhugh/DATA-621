@@ -142,7 +142,7 @@ locations—even within the same chain—so imputing them could affect time-base
 analysis, making imputation inappropriate.  In all these cases,removing
 incomplete entries helps maintain the accuracy, validity, and integrity of the dataset.
 ```{r, echo=FALSE}
-# Handle missing data: For simplicity, we'll drop rows with critical missing values
+# Handle missing data
 yelp_cleaned <- yelp %>%
   filter(!is.na(address)) %>%
   filter(!is.na(attributes)) %>%

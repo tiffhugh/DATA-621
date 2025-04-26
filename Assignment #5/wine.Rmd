@@ -1069,3 +1069,78 @@ cat("AIC:", AIC(enhanced_nb), "\n")
 ```
 The enhanced negative binomial model produced a slight improvement over the basic model, achieving a lower RMSE (1.3950), lower MAE (1.1327), and a reduced AIC (47170). Significant predictors like STARS, LabelAppeal, log_Alcohol, log_TotalSulfurDioxide, and AcidIndex remained strong, while interaction variables like AcidityRatio also contributed meaningfully. Similar to earlier models, the warning on theta estimation suggests minimal overdispersion, confirming that both the Poisson and negative binomial approaches are appropriate for this dataset. Overall, the enhanced model offered a modest but measurable improvement in predictive performance.
 
+### **Multiple Linear Regression Models**
+
+Although Poisson and Negative Binomial models are better suited for count data, we fit a basic multiple linear regression model using the same predictors. This comparison helps assess whether the linear model can still offer competitive predictive performance or reveal different insights into feature relationships.
+
+#### **Model 1: Basic Multiple Linear Regression**
+
+```{r, echo=FALSE}
+library(MASS)
+library(ggplot2)
+library(dplyr)
+
+# Fit the basic multiple linear regression model
+basic_lm <- lm(TARGET ~ STARS + LabelAppeal + Alcohol + 
+                TotalSulfurDioxide + FreeSulfurDioxide + 
+                ResidualSugar + pH + AcidIndex,
+              data = final_training_data)
+
+# Model summary
+cat("Basic Multiple Linear Regression Model Summary:\n")
+summary(basic_lm)
+
+# Calculate predictions
+predictions_basic_lm <- predict(basic_lm)
+
+# Calculate performance metrics
+rmse_basic_lm <- sqrt(mean((final_training_data$TARGET - predictions_basic_lm)^2))
+mae_basic_lm <- mean(abs(final_training_data$TARGET - predictions_basic_lm))
+
+cat("\nBasic Linear Model Performance Metrics:\n")
+cat("RMSE:", rmse_basic_lm, "\n")
+cat("MAE:", mae_basic_lm, "\n")
+cat("AIC:", AIC(basic_lm), "\n")
+
+# Diagnostic plots
+par(mfrow = c(2, 2))
+plot(basic_lm)
+```
+The basic linear regression model achieved an RMSE of 1.4031 and MAE of 1.1296, comparable to the Poisson and Negative Binomial models. However, the residual standard error (1.404) and R² value of 0.4695 indicate only moderate fit, suggesting that a linear model may not fully capture the underlying count-based structure of the target variable. Despite this, key predictors like STARS, LabelAppeal, Alcohol, TotalSulfurDioxide, and AcidIndex remained highly significant, consistent with previous models.
+
+#### **Model 2: Enhanced Multiple Linear Regression**
+After building the basic linear regression, we expanded the feature set to include transformed variables and engineered interaction terms. This enhanced model aims to capture non-linear effects and subtle relationships between chemical features and wine ratings, offering a potentially better fit compared to the simpler baseline.
+
+```{r, echo=FALSE}
+# Fit the enhanced multiple linear regression model
+enhanced_lm <- lm(TARGET ~ STARS + LabelAppeal + 
+                  log_Alcohol + log_TotalSulfurDioxide + 
+                  log_FreeSulfurDioxide + log_ResidualSugar + 
+                  TotalAcidity + AcidityRatio + 
+                  SulfurToAcidRatio + AlcoholToSugarRatio + 
+                  pHToAcidityRatio + AcidIndex,
+                data = final_training_data)
+
+# Model summary
+cat("Enhanced Multiple Linear Regression Model Summary:\n")
+summary(enhanced_lm)
+
+# Calculate predictions
+predictions_enhanced_lm <- predict(enhanced_lm)
+
+# Calculate performance metrics
+rmse_enhanced_lm <- sqrt(mean((final_training_data$TARGET - predictions_enhanced_lm)^2))
+mae_enhanced_lm <- mean(abs(final_training_data$TARGET - predictions_enhanced_lm))
+
+cat("\nEnhanced Linear Model Performance Metrics:\n")
+cat("RMSE:", rmse_enhanced_lm, "\n")
+cat("MAE:", mae_enhanced_lm, "\n")
+cat("AIC:", AIC(enhanced_lm), "\n")
+
+# Diagnostic plots
+par(mfrow = c(2, 2))
+plot(enhanced_lm)
+```
+The enhanced multiple linear regression model slightly improves model fit over the basic version, as shown by a lower RMSE (1.399 vs. 1.403) and MAE (1.126 vs. 1.130). The AIC also dropped from 45006 to 44951, indicating a more efficient model despite the increased number of predictors. Key variables like log_Alcohol, log_TotalSulfurDioxide, and AcidIndex remain highly significant, confirming their strong predictive influence. 
+
+However, some engineered ratios like AlcoholToSugarRatio and SulfurToAcidRatio did not significantly contribute, suggesting that while feature engineering adds value, careful selection is still important.

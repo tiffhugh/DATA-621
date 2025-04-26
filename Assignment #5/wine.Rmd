@@ -51,7 +51,7 @@ wine_training_data <- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-
 wine_evaluation_data<- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/Assignment%20%235/wine-evaluation-data.csv")
 ```
 
-# **Data Exploration**
+##**Data Exploration**
 First, let's remove the 'INDEX' column in both of the dataset, since we are not going to need it.
 ```{r, echo=FALSE}
 # remove index columns
@@ -64,7 +64,7 @@ wine_evaluation_data <- wine_evaluation_data %>% select(-IN)
 ```
 Our wine training dataset has 12,795 observations and 15 columns. As we can see, there are a lot of data transformations that needs to be done with our variables, like cleaning our values and changing the columns into categorical values, like for `LabelAppeal` and `STARS`.
 
-### Data Transformation of Variables
+###**Data Transformation of Variables**
 First, we clean the data by removing leading hyphens (-) from numeric values, as chemical concentrations cannot be negative, and such entries likely result from formatting errors.
 ```{r, echo=FALSE}
 # clean the values in our variables by removing hyphens
@@ -114,7 +114,7 @@ wine_evaluation_data <- wine_evaluation_data %>%
     across(c(STARS, LabelAppeal), as.ordered)
   )
 ```
-### Summary of Datasets
+###**Summary of Datasets**
 In our dataset, missing values (NA) appear in variables such as `ResidualSugar`, `Chlorides`, `FreeSulfurDioxide`, `TotalSulfurDioxide`, `pH`, `Sulphates`, `Alcohol`, and `STARS`. We plan to address these through appropriate imputation techniques, including median imputation, Predictive Mean Matching (PPM) for continuous variables, or proportional odds logistic regression (polr) via the `mice` package for ordinal categorical variables like STARS, depending on variable distribution.
 
 From our summary, some extreme values also warrant attention. For instance, `FixedAcidity` values greater than 16 g/L are chemically improbable, as white wines typically range between 4–10 g/L and red wines 4–16 g/L. For `FreeSulfurDioxide`, values exceeding 350 mg/L surpass US regulatory limits, and EU limits are even lower (~150 mg/L). Given the lack of country-specific data, we'll apply US thresholds. Similar logic applies to `TotalSulfurDioxide`.
@@ -128,7 +128,7 @@ However, for variables like `ResidualSugar`, `Density`, and `Alcohol`, we'll ret
 cat("Summary of training data: \n")
 summary(wine_training_data)
 ```
-### Plots for Visual Assesment
+###**Plots for Visual Assesment**
 Below we can see that most of our variables are skewed to the right, only `ph` and `Density` are somewhat normally distributed.
 ```{r, echo=FALSE}
 #| fig-height: 5
@@ -142,7 +142,7 @@ plot_boxplot(wine_training_data, by='TARGET')
 cat("Barplot of training data: \n")
 plot_bar(wine_training_data)
 ```
-### Visual Correlation of Variables
+###**Visual Correlation of Variables**
 ```{r, echo=FALSE, message=FALSE}
 #| fig-height: 5
 #| fig-width: 10
@@ -161,8 +161,8 @@ Additionally, we note a correlation between `TARGET` and `STARS_3`, but the p-va
 
 With these insights, we're ready to move forward with the data preparation phase.
 
-# **Data Preparation**
-### Replace Extreme Variables With NA
+##**Data Preparation**
+###**Replace Extreme Variables With NA**
 First, let's replace the extreme values from the certain variables that we have:
 Threshold of `FixedAcidity`: 16 g/L
 Threshold of `FreeSulfurDioxide`: 350 mg/L
@@ -186,7 +186,7 @@ wine_evaluation_data <- wine_evaluation_data %>%
     TotalSulfurDioxide = ifelse(TotalSulfurDioxide > 350, NA, TotalSulfurDioxide)
   )
 ```
-### Imputation of Variables
+###**Imputation of Variables**
 For the continuous variables, we employed Predictive Mean Matching (PMM) using the mice package. PMM is particularly well-suited for continuous data as it preserves the original data distribution and effectively handles non-normality and skewed distributions. This makes it ideal when maintaining the natural variability of the data is important.
 
 For the ordinal variable `STARS`, we used the polr method (proportional odds logistic regression), which is appropriate for ordered categorical data and assumes the proportional odds assumption—a reasonable assumption for many rating-based variables.
@@ -223,7 +223,7 @@ mice_imp_eval <- mice(input_evaluation, m = 5,
 clean_wine_evaluation_data <- complete(mice_imp_eval, 3)
 ```
 
-### Creating missing value flags for all variables
+###**Creating missing value flags for all variables**
 
 ```{r, echo=FALSE}
 # missing value flags for training data
@@ -526,7 +526,7 @@ To better understand variable distributions, we grouped continuous features into
 
 These bucketed distributions help reveal central tendencies and detect skewed variables or potential outliers, improving clarity for downstream modeling or classification strategies.
 
-### Applying mathematical transformations to continuous variables
+###**Applying mathematical transformations to continuous variables**
 ```{r, echo=FALSE}
 library(MASS)
 library(dplyr)
@@ -774,8 +774,6 @@ wrap_plots(engineered_plots, ncol = 3) +
 # summary
 summary(clean_wine_training_data)
 ```
-### **Summary Statistics and Feature Insights**
-
 The dataset covers 12,795 wine samples with a target variable (`TARGET`) ranging from 0 to 8 (mean: 3.03, median: 3), indicating a relatively balanced rating distribution.
 
 Several features exhibited strong right skewness, including:
@@ -795,9 +793,9 @@ These engineered ratios captured important interaction effects between acidity, 
 
 Lastly, missing data was observed primarily in `STARS` (~26%), `TotalSulfurDioxide` (~21%), and `pH` (~3%). Missingness flags were created to preserve information for downstream machine learning models.
 
-### Final data check before modeling
+###**Final data check before modeling**
 ```{r, echo=FALSE}
-# Final data check before modeling
+# final data check before modeling
 cat("Final Data Check:\n")
 
 # 1. checking for remaining missing values
@@ -823,7 +821,8 @@ for(var in bucket_vars) {
 
 # 5. Prepare data for modeling
 cat("\n5. Preparing Data for Modeling:\n")
-# Select only the variables needed for modeling
+
+# we select only the variables needed for modeling
 final_training_data <- clean_wine_training_data %>%
   dplyr::select(
     TARGET, 
@@ -843,13 +842,13 @@ final_training_data <- clean_wine_training_data %>%
     pHToAcidityRatio
   )
 
-# Handle problematic values in the enhanced model variables
+# handling problematic values in the enhanced model variables
 cat("\nHandling problematic values in enhanced model variables:\n")
 problem_vars <- c("log_Alcohol", "log_TotalSulfurDioxide", "log_FreeSulfurDioxide", 
                  "log_ResidualSugar", "TotalAcidity", "AcidityRatio", 
                  "SulfurToAcidRatio", "AlcoholToSugarRatio", "pHToAcidityRatio")
 
-# Check for NA, NaN, and Inf values
+# checking for NA, NaN, and Inf values
 for(var in problem_vars) {
   cat("\nChecking", var, ":\n")
   cat("NA count:", sum(is.na(final_training_data[[var]])), "\n")
@@ -857,16 +856,15 @@ for(var in problem_vars) {
   cat("Inf count:", sum(is.infinite(final_training_data[[var]])), "\n")
 }
 
-# Clean problematic values and ensure all variables are numeric
+# clean problematic values
 final_training_data <- final_training_data %>%
   mutate(
-    # Replace Inf with NA for ratio variables
+
     AcidityRatio = ifelse(is.infinite(AcidityRatio), NA, AcidityRatio),
     SulfurToAcidRatio = ifelse(is.infinite(SulfurToAcidRatio), NA, SulfurToAcidRatio),
     AlcoholToSugarRatio = ifelse(is.infinite(AlcoholToSugarRatio), NA, AlcoholToSugarRatio),
     pHToAcidityRatio = ifelse(is.infinite(pHToAcidityRatio), NA, pHToAcidityRatio),
     
-    # Ensure log-transformed variables are valid
     log_Alcohol = ifelse(is.na(log_Alcohol) | is.infinite(log_Alcohol), 
                         log(Alcohol + 1), log_Alcohol),
     log_TotalSulfurDioxide = ifelse(is.na(log_TotalSulfurDioxide) | is.infinite(log_TotalSulfurDioxide), 
@@ -876,16 +874,14 @@ final_training_data <- final_training_data %>%
     log_ResidualSugar = ifelse(is.na(log_ResidualSugar) | is.infinite(log_ResidualSugar), 
                               log(ResidualSugar + 1), log_ResidualSugar),
     
-    # Ensure all variables are numeric
     across(all_of(problem_vars), as.numeric)
   )
 
-# Final imputation for any remaining NA values
+# final imputation before modeling
 cat("\nPerforming final imputation for remaining NA values:\n")
 imputed_data <- mice(final_training_data, m=1, maxit=50, method='pmm', seed=500)
 final_training_data <- complete(imputed_data)
 
-# Verify all problematic values are handled
 cat("\nVerifying problematic values are handled:\n")
 for(var in problem_vars) {
   cat("\nChecking", var, "after cleaning:\n")
@@ -894,10 +890,7 @@ for(var in problem_vars) {
   cat("Inf count:", sum(is.infinite(final_training_data[[var]])), "\n")
 }
 
-# Save evaluation data
 final_evaluation_data <- clean_wine_evaluation_data
-
-cat("\nData preparation complete. Datasets are ready for modeling.\n")
 ```
 
 After reviewing the final data check, we can proceed with modeling as the dataset is in good shape: while there are some minor NAs in engineered ratios (18-42 cases out of 12,795 observations) and extreme values in ratio variables, these are expected outcomes of chemical relationships in wine and won't significantly impact model performance. The core variables have been properly transformed, bucket distributions are reasonable, and all data types are correct. 
@@ -905,14 +898,14 @@ After reviewing the final data check, we can proceed with modeling as the datase
 The dataset's size (12,795 observations) provides sufficient data for robust modeling, and the time investment needed for additional cleaning would likely yield only marginal improvements. Therefore, we're ready to proceed with the modeling phase, where we can address any specific issues that might arise during model development.
 
 ## **Build Models**
-## **Poisson Regression Models**
+### **Poisson Regression Models**
 
 Since our target variable `TARGET` represents the number of wine cases purchased (a count variable), Poisson regression is an appropriate choice. We'll build two different models focusing on the key factors that influence wine sales:
 
 1. A basic model using the most influential variables based on business context
 2. An enhanced model incorporating transformed variables and additional chemical interactions
 
-### **Model 1: Basic Poisson Regression**
+#### **Model 1: Basic Poisson Regression**
 
 To establish a baseline, we fit a Poisson regression model using key predictors identified from the exploratory analysis, including `STARS`, `LabelAppeal`, `Alcohol`, `TotalSulfurDioxide`, `FreeSulfurDioxide`, `ResidualSugar`, `pH`, and `AcidIndex`. This model assumes the Poisson distribution is appropriate for the count-based target variable (`TARGET`).  
 
@@ -923,29 +916,29 @@ library(ggplot2)
 library(dplyr)
 library(AER)  # Added for dispersiontest
 
-# Fit the basic model
+# fitting the basic model
 basic_poisson <- glm(TARGET ~ STARS + LabelAppeal + Alcohol + 
                      TotalSulfurDioxide + FreeSulfurDioxide + 
                      ResidualSugar + pH + AcidIndex,
                    data = final_training_data,
                    family = poisson(link = "log"))
 
-# Model summary
+# summary
 cat("Basic Poisson Regression Model Summary:\n")
 summary(basic_poisson)
 
-# Check for overdispersion
+# checking for overdispersion
 cat("\nOverdispersion Test for Basic Model:\n")
 dispersiontest(basic_poisson)
 
-# Residual plots
+# plots
 par(mfrow = c(2, 2))
 plot(basic_poisson, which = 1:4)
 
-# Calculate predictions
+# predictions
 predictions_basic <- predict(basic_poisson, type = "response")
 
-# Calculate performance metrics
+# performance metrics
 rmse_basic <- sqrt(mean((final_training_data$TARGET - predictions_basic)^2))
 mae_basic <- mean(abs(final_training_data$TARGET - predictions_basic))
 
@@ -960,7 +953,7 @@ The basic Poisson model shows that `STARS`, `LabelAppeal`, `Alcohol`, `TotalSulf
 After evaluating the basic model, we enhanced the Poisson regression by incorporating log-transformed chemical features and engineered interaction variables. These additions aim to capture nonlinear effects and improve model fit while maintaining interpretability. The following code fits the enhanced model and evaluates its performance.
 
 ```{r, echo=FALSE}
-# Fit the enhanced model
+# fitting the enhanced model
 enhanced_poisson <- glm(TARGET ~ STARS + LabelAppeal + 
                         log_Alcohol + log_TotalSulfurDioxide + 
                         log_FreeSulfurDioxide + log_ResidualSugar + 
@@ -970,22 +963,22 @@ enhanced_poisson <- glm(TARGET ~ STARS + LabelAppeal +
                       data = final_training_data,
                       family = poisson(link = "log"))
 
-# Model summary
+# summary
 cat("Enhanced Poisson Regression Model Summary:\n")
 summary(enhanced_poisson)
 
-# Check for overdispersion
+# checking for overdispersion
 cat("\nOverdispersion Test for Enhanced Model:\n")
 dispersiontest(enhanced_poisson)
 
-# Residual plots
+# plots
 par(mfrow = c(2, 2))
 plot(enhanced_poisson, which = 1:4)
 
-# Calculate predictions
+# predictions
 predictions_enhanced <- predict(enhanced_poisson, type = "response")
 
-# Calculate performance metrics
+# performance metrics
 rmse_enhanced <- sqrt(mean((final_training_data$TARGET - predictions_enhanced)^2))
 mae_enhanced <- mean(abs(final_training_data$TARGET - predictions_enhanced))
 
@@ -1014,20 +1007,20 @@ library(pscl)
 library(ggplot2)
 library(dplyr)
 
-# Fit the basic negative binomial model
+# fitting the basic model
 basic_nb <- glm.nb(TARGET ~ STARS + LabelAppeal + Alcohol + 
                     TotalSulfurDioxide + FreeSulfurDioxide + 
                     ResidualSugar + pH + AcidIndex,
                   data = final_training_data)
 
-# Model summary
+# summary
 cat("Basic Negative Binomial Regression Model Summary:\n")
 summary(basic_nb)
 
-# Calculate predictions
+# predictions
 predictions_basic_nb <- predict(basic_nb, type = "response")
 
-# Calculate performance metrics
+# performance metrics
 rmse_basic_nb <- sqrt(mean((final_training_data$TARGET - predictions_basic_nb)^2))
 mae_basic_nb <- mean(abs(final_training_data$TARGET - predictions_basic_nb))
 
@@ -1042,7 +1035,7 @@ The basic Negative Binomial model produced results almost identical to the basic
 To build on the basic negative binomial model, we next incorporate transformed variables and engineered chemical interaction features. This enhanced specification allows us to capture potential nonlinearities and complex relationships in the data, improving model flexibility without overcomplicating the structure.
 
 ```{r, echo=FALSE}
-# Fit the enhanced negative binomial model
+# fitting the enhanced model
 enhanced_nb <- glm.nb(TARGET ~ STARS + LabelAppeal + 
                       log_Alcohol + log_TotalSulfurDioxide + 
                       log_FreeSulfurDioxide + log_ResidualSugar + 
@@ -1051,14 +1044,14 @@ enhanced_nb <- glm.nb(TARGET ~ STARS + LabelAppeal +
                       pHToAcidityRatio + AcidIndex,
                     data = final_training_data)
 
-# Model summary
+# summary
 cat("Enhanced Negative Binomial Regression Model Summary:\n")
 summary(enhanced_nb)
 
-# Calculate predictions
+# predictions
 predictions_enhanced_nb <- predict(enhanced_nb, type = "response")
 
-# Calculate performance metrics
+# performance metrics
 rmse_enhanced_nb <- sqrt(mean((final_training_data$TARGET - predictions_enhanced_nb)^2))
 mae_enhanced_nb <- mean(abs(final_training_data$TARGET - predictions_enhanced_nb))
 
@@ -1080,20 +1073,20 @@ library(MASS)
 library(ggplot2)
 library(dplyr)
 
-# Fit the basic multiple linear regression model
+# fitting the basic model
 basic_lm <- lm(TARGET ~ STARS + LabelAppeal + Alcohol + 
                 TotalSulfurDioxide + FreeSulfurDioxide + 
                 ResidualSugar + pH + AcidIndex,
               data = final_training_data)
 
-# Model summary
+# summary
 cat("Basic Multiple Linear Regression Model Summary:\n")
 summary(basic_lm)
 
-# Calculate predictions
+# predictions
 predictions_basic_lm <- predict(basic_lm)
 
-# Calculate performance metrics
+# performance metrics
 rmse_basic_lm <- sqrt(mean((final_training_data$TARGET - predictions_basic_lm)^2))
 mae_basic_lm <- mean(abs(final_training_data$TARGET - predictions_basic_lm))
 
@@ -1102,7 +1095,7 @@ cat("RMSE:", rmse_basic_lm, "\n")
 cat("MAE:", mae_basic_lm, "\n")
 cat("AIC:", AIC(basic_lm), "\n")
 
-# Diagnostic plots
+# plots
 par(mfrow = c(2, 2))
 plot(basic_lm)
 ```
@@ -1112,7 +1105,7 @@ The basic linear regression model achieved an RMSE of 1.4031 and MAE of 1.1296, 
 After building the basic linear regression, we expanded the feature set to include transformed variables and engineered interaction terms. This enhanced model aims to capture non-linear effects and subtle relationships between chemical features and wine ratings, offering a potentially better fit compared to the simpler baseline.
 
 ```{r, echo=FALSE}
-# Fit the enhanced multiple linear regression model
+# fitting the enhanced model
 enhanced_lm <- lm(TARGET ~ STARS + LabelAppeal + 
                   log_Alcohol + log_TotalSulfurDioxide + 
                   log_FreeSulfurDioxide + log_ResidualSugar + 
@@ -1121,14 +1114,14 @@ enhanced_lm <- lm(TARGET ~ STARS + LabelAppeal +
                   pHToAcidityRatio + AcidIndex,
                 data = final_training_data)
 
-# Model summary
+# summary
 cat("Enhanced Multiple Linear Regression Model Summary:\n")
 summary(enhanced_lm)
 
-# Calculate predictions
+# predictions
 predictions_enhanced_lm <- predict(enhanced_lm)
 
-# Calculate performance metrics
+# performance metrics
 rmse_enhanced_lm <- sqrt(mean((final_training_data$TARGET - predictions_enhanced_lm)^2))
 mae_enhanced_lm <- mean(abs(final_training_data$TARGET - predictions_enhanced_lm))
 
@@ -1137,7 +1130,7 @@ cat("RMSE:", rmse_enhanced_lm, "\n")
 cat("MAE:", mae_enhanced_lm, "\n")
 cat("AIC:", AIC(enhanced_lm), "\n")
 
-# Diagnostic plots
+# plots
 par(mfrow = c(2, 2))
 plot(enhanced_lm)
 ```
@@ -1145,32 +1138,30 @@ The enhanced multiple linear regression model slightly improves model fit over t
 
 However, some engineered ratios like AlcoholToSugarRatio and SulfurToAcidRatio did not significantly contribute, suggesting that while feature engineering adds value, careful selection is still important.
 
-Absolutely — I’ll make it match the style of your previous sections. Here's your full **Zero-Inflated Models** section ready to copy-paste:
-
-## **Zero-Inflated Regression Models (Optional Exploration)**
+### **Zero-Inflated Regression Models (Optional Exploration)**
 
 While zero-inflated Poisson (ZIP) and zero-inflated Negative Binomial (ZINB) models were not required for this assignment, we explored them briefly to check if accounting for excess zeros could improve model performance. Given that the TARGET variable (number of wine cases purchased) could plausibly include many zeros, this was a reasonable area to investigate.
 
 We first fit a zero-inflated Poisson model using the same predictors as the basic Poisson regression. The `pscl` package's `zeroinfl()` function was used for this task.
 
-### **Model 1: Zero-Inflated Poisson (ZIP) Regression**
+#### **ZIP Model**
 
 ```{r, echo=FALSE}
 library(pscl)
 
-# Fit the Zero-Inflated Poisson model
+# fit the zero-inflated poisson model
 zip_model <- zeroinfl(TARGET ~ STARS + LabelAppeal + Alcohol + TotalSulfurDioxide + 
                       FreeSulfurDioxide + ResidualSugar + pH + AcidIndex | 1,
                       data = final_training_data, dist = "poisson")
 
-# Model summary
+# summary
 cat("Zero-Inflated Poisson Regression Model Summary:\n")
 summary(zip_model)
 
-# Calculate predictions
+# predictions
 predictions_zip <- predict(zip_model)
 
-# Calculate performance metrics
+# calculate metrics
 rmse_zip <- sqrt(mean((final_training_data$TARGET - predictions_zip)^2))
 mae_zip <- mean(abs(final_training_data$TARGET - predictions_zip))
 
@@ -1179,33 +1170,24 @@ cat("RMSE:", rmse_zip, "\n")
 cat("MAE:", mae_zip, "\n")
 cat("AIC:", AIC(zip_model), "\n")
 ```
-The Zero-Inflated Poisson (ZIP) model produced a higher RMSE (1.48) and MAE (1.21) compared to the basic and enhanced Poisson models (which had RMSE around 1.39 and MAE around 1.13). The AIC (45933) was also higher than the enhanced linear models but lower than the basic Poisson models, indicating mixed performance.
-
-Most key predictors, such as STARS, LabelAppeal, Alcohol, and AcidIndex, remained highly significant. However, the higher prediction errors suggest that zero-inflation did not meaningfully improve model performance in this case. This supports the conclusion that standard Poisson and Negative Binomial models were sufficient for this dataset.
-
-### **Zero-Inflated Negative Binomial Regression Models**
-
-While our zero-inflated Poisson model showed limited improvement, we also explored a Zero-Inflated Negative Binomial (ZINB) model. This allows even more flexibility by modeling overdispersion separately from excess zeros. Testing both ZIP and ZINB models ensures we leave no major modeling approach unexplored.
-
-#### **Model: Zero-Inflated Negative Binomial Regression**
 
 ```{r, echo=FALSE}
 library(pscl)
 
-# Fit the ZINB model
+# fit the zinb model
 zinb_model <- zeroinfl(TARGET ~ STARS + LabelAppeal + Alcohol + TotalSulfurDioxide + 
                        FreeSulfurDioxide + ResidualSugar + pH + AcidIndex | 1, 
                        data = final_training_data, 
                        dist = "negbin")
 
-# Model summary
+# summary
 cat("Zero-Inflated Negative Binomial Regression Model Summary:\n")
 summary(zinb_model)
 
-# Calculate predictions
+# predictions
 predictions_zinb <- predict(zinb_model, type = "response")
 
-# Calculate performance metrics
+# metrics
 rmse_zinb <- sqrt(mean((final_training_data$TARGET - predictions_zinb)^2))
 mae_zinb <- mean(abs(final_training_data$TARGET - predictions_zinb))
 
@@ -1228,3 +1210,54 @@ Across all modeling approaches—Poisson, Negative Binomial, Multiple Linear Reg
 - **Zero-Inflated models** (ZIP and ZINB) did not provide significant gains in predictive accuracy, suggesting that the dataset did not suffer heavily from excess zeros.
 
 In summary, the **Enhanced Poisson and Enhanced Negative Binomial models** provided the best combination of predictive accuracy (RMSE ≈ 1.395, MAE ≈ 1.133) and theoretical soundness for this problem. While linear regression and zero-inflated models were explored for completeness, the core Poisson-based models were ultimately the most appropriate for final model selection.
+
+
+## **Model Selection**
+
+To select the final model for deployment, we considered several evaluation criteria:
+
+- **Root Mean Squared Error (RMSE)**: Measures the standard deviation of the prediction errors. Lower values indicate better fit.
+- **Mean Absolute Error (MAE)**: Measures the average magnitude of the errors. Lower values are preferred.
+- **Akaike Information Criterion (AIC)**: Balances model fit and complexity. Lower AIC suggests a better and more parsimonious model.
+- **Theoretical Fit**: Since our target `TARGET` is a count variable, Poisson or Negative Binomial regression models are more appropriate than linear regression.
+- **Model Interpretability**: We prioritized models that remain easy to interpret for business stakeholders without sacrificing predictive performance.
+
+### **Summary of Model Performance**
+
+| Model                              |    RMSE   |    MAE    |   AIC    |
+|------------------------------------|-----------|-----------|----------|
+| Basic Poisson                     |   1.3972  |   1.1342  |  47207   |
+| Enhanced Poisson                  |   1.3950  |   1.1327  |  47167   |
+| Basic Negative Binomial           |   1.3972  |   1.1342  |  47209   |
+| Enhanced Negative Binomial        |   1.3950  |   1.1327  |  47170   |
+| Basic Linear Regression           |   1.4031  |   1.1296  |  45006   |
+| Enhanced Linear Regression        |   1.3996  |   1.1258  |  44951   |
+| Zero-Inflated Poisson (ZIP)        |   1.4802  |   1.2067  |  45933   |
+| Zero-Inflated Neg Binomial (ZINB)  |   1.4802  |   1.2066  |  45935   |
+
+### **Model Selection Decision**
+
+Although multiple linear regression models achieved similar RMSE and MAE values to the Poisson-based models, they are less theoretically appropriate for modeling count data. The target variable is discrete, non-negative, and likely Poisson-distributed, making count models a better fit for inference and deployment.
+
+Among the count models:
+- The **Enhanced Poisson Regression** and **Enhanced Negative Binomial Regression** models performed almost identically in RMSE (1.3950), MAE (1.1327), and AIC (~47167-47170).
+- **Poisson assumptions held reasonably well** (no significant overdispersion detected).
+- The **Enhanced Poisson model** is more **parsimonious** (fewer parameters, simpler estimation) compared to the Negative Binomial model, which introduces an additional dispersion parameter with no substantial performance gain.
+
+Thus, for **model deployment**, we **selected the Enhanced Poisson Regression model**. It offers:
+- The lowest AIC among the count models
+- Good predictive performance (RMSE and MAE)
+- Interpretability, simplicity, and alignment with the nature of the target variable
+
+### **Inference from the Selected Model**
+
+Key inferences from the Enhanced Poisson model include:
+- **STARS** and **LabelAppeal** are the strongest predictors of wine sales, with highly significant coefficients.
+- Chemical features like **log_Alcohol**, **log_TotalSulfurDioxide**, and **AcidIndex** also have significant influence.
+- Feature transformations (log transformations and engineered ratios) helped capture nonlinear relationships without overcomplicating the model.
+
+The coefficients can be interpreted as **multiplicative effects** on the expected count of wine cases purchased. For example, an increase in STARS rating linearly increases the log of the expected number of cases purchased, holding other variables constant.
+
+### **Preparing for Model Deployment**
+
+With the Enhanced Poisson Regression model selected, we now proceed to generate predictions on the evaluation dataset. This final step will validate how well the model generalizes to unseen data and prepare it for potential deployment.

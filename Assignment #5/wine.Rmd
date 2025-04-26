@@ -995,3 +995,77 @@ cat("MAE:", mae_enhanced, "\n")
 cat("AIC:", AIC(enhanced_poisson), "\n")
 ```
 Compared to the basic model, the enhanced Poisson regression achieved lower RMSE (1.395 vs. 1.397), slightly improved MAE (1.133 vs. 1.134), and a meaningful reduction in AIC (47167 vs. 47207). No overdispersion was detected in either model. The improvements, though modest in error metrics, demonstrate that feature engineering and log transformations captured important nonlinear relationships, strengthening the overall model. Therefore, the enhanced model was selected for subsequent analysis.
+
+### **Negative Binomial Regression Models**
+
+While our previous Poisson models showed no significant overdispersion (dispersion ≈ 0.89, p-value = 1), we'll still explore negative binomial regression models for completeness and to verify our findings. This is a good practice in model building - to try different approaches even when we have a good initial model, as it helps validate our results and potentially discover new insights.
+
+We'll build two different models:
+
+1. A basic negative binomial model focusing on key business variables
+2. An enhanced negative binomial model incorporating transformed variables and chemical interactions
+
+#### **Model 1: Basic Negative Binomial Regression**
+The Negative Binomial model introduces an extra parameter to handle variance separately from the mean, providing additional flexibility. We begin by fitting a basic version of the model using the same predictors as the basic Poisson regression.
+
+```{r, echo=FALSE}
+library(MASS)
+library(pscl)
+library(ggplot2)
+library(dplyr)
+
+# Fit the basic negative binomial model
+basic_nb <- glm.nb(TARGET ~ STARS + LabelAppeal + Alcohol + 
+                    TotalSulfurDioxide + FreeSulfurDioxide + 
+                    ResidualSugar + pH + AcidIndex,
+                  data = final_training_data)
+
+# Model summary
+cat("Basic Negative Binomial Regression Model Summary:\n")
+summary(basic_nb)
+
+# Calculate predictions
+predictions_basic_nb <- predict(basic_nb, type = "response")
+
+# Calculate performance metrics
+rmse_basic_nb <- sqrt(mean((final_training_data$TARGET - predictions_basic_nb)^2))
+mae_basic_nb <- mean(abs(final_training_data$TARGET - predictions_basic_nb))
+
+cat("\nBasic Negative Binomial Model Performance Metrics:\n")
+cat("RMSE:", rmse_basic_nb, "\n")
+cat("MAE:", mae_basic_nb, "\n")
+cat("AIC:", AIC(basic_nb), "\n")
+```
+The basic Negative Binomial model produced results almost identical to the basic Poisson model, with RMSE (1.3972), MAE (1.1342), and AIC (47209) very close to those of the Poisson version. The coefficients and significance levels for key predictors such as STARS, LabelAppeal, Alcohol, and AcidIndex remain consistent, indicating that overdispersion was not a serious issue. The warning on theta estimation suggests that the variance adjustment had little effect, reaffirming that the Poisson assumptions were reasonable for this dataset.
+
+#### **Model 2: Enhanced Negative Binomial Regression**
+To build on the basic negative binomial model, we next incorporate transformed variables and engineered chemical interaction features. This enhanced specification allows us to capture potential nonlinearities and complex relationships in the data, improving model flexibility without overcomplicating the structure.
+
+```{r, echo=FALSE}
+# Fit the enhanced negative binomial model
+enhanced_nb <- glm.nb(TARGET ~ STARS + LabelAppeal + 
+                      log_Alcohol + log_TotalSulfurDioxide + 
+                      log_FreeSulfurDioxide + log_ResidualSugar + 
+                      TotalAcidity + AcidityRatio + 
+                      SulfurToAcidRatio + AlcoholToSugarRatio + 
+                      pHToAcidityRatio + AcidIndex,
+                    data = final_training_data)
+
+# Model summary
+cat("Enhanced Negative Binomial Regression Model Summary:\n")
+summary(enhanced_nb)
+
+# Calculate predictions
+predictions_enhanced_nb <- predict(enhanced_nb, type = "response")
+
+# Calculate performance metrics
+rmse_enhanced_nb <- sqrt(mean((final_training_data$TARGET - predictions_enhanced_nb)^2))
+mae_enhanced_nb <- mean(abs(final_training_data$TARGET - predictions_enhanced_nb))
+
+cat("\nEnhanced Negative Binomial Model Performance Metrics:\n")
+cat("RMSE:", rmse_enhanced_nb, "\n")
+cat("MAE:", mae_enhanced_nb, "\n")
+cat("AIC:", AIC(enhanced_nb), "\n")
+```
+The enhanced negative binomial model produced a slight improvement over the basic model, achieving a lower RMSE (1.3950), lower MAE (1.1327), and a reduced AIC (47170). Significant predictors like STARS, LabelAppeal, log_Alcohol, log_TotalSulfurDioxide, and AcidIndex remained strong, while interaction variables like AcidityRatio also contributed meaningfully. Similar to earlier models, the warning on theta estimation suggests minimal overdispersion, confirming that both the Poisson and negative binomial approaches are appropriate for this dataset. Overall, the enhanced model offered a modest but measurable improvement in predictive performance.
+

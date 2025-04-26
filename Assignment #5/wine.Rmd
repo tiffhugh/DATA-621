@@ -821,8 +821,80 @@ for(var in bucket_vars) {
   print(table(clean_wine_training_data[[var]], useNA = "ifany"))
 }
 
-# 5. save final datasets
-final_training_data <- clean_wine_training_data
+# 5. Prepare data for modeling
+cat("\n5. Preparing Data for Modeling:\n")
+# Select only the variables needed for modeling
+final_training_data <- clean_wine_training_data %>%
+  dplyr::select(
+    TARGET, 
+    STARS, 
+    LabelAppeal, 
+    Alcohol, 
+    TotalSulfurDioxide, 
+    FreeSulfurDioxide, 
+    ResidualSugar, 
+    pH, 
+    AcidIndex,
+    starts_with("log_"),
+    TotalAcidity, 
+    AcidityRatio, 
+    SulfurToAcidRatio, 
+    AlcoholToSugarRatio, 
+    pHToAcidityRatio
+  )
+
+# Handle problematic values in the enhanced model variables
+cat("\nHandling problematic values in enhanced model variables:\n")
+problem_vars <- c("log_Alcohol", "log_TotalSulfurDioxide", "log_FreeSulfurDioxide", 
+                 "log_ResidualSugar", "TotalAcidity", "AcidityRatio", 
+                 "SulfurToAcidRatio", "AlcoholToSugarRatio", "pHToAcidityRatio")
+
+# Check for NA, NaN, and Inf values
+for(var in problem_vars) {
+  cat("\nChecking", var, ":\n")
+  cat("NA count:", sum(is.na(final_training_data[[var]])), "\n")
+  cat("NaN count:", sum(is.nan(final_training_data[[var]])), "\n")
+  cat("Inf count:", sum(is.infinite(final_training_data[[var]])), "\n")
+}
+
+# Clean problematic values and ensure all variables are numeric
+final_training_data <- final_training_data %>%
+  mutate(
+    # Replace Inf with NA for ratio variables
+    AcidityRatio = ifelse(is.infinite(AcidityRatio), NA, AcidityRatio),
+    SulfurToAcidRatio = ifelse(is.infinite(SulfurToAcidRatio), NA, SulfurToAcidRatio),
+    AlcoholToSugarRatio = ifelse(is.infinite(AlcoholToSugarRatio), NA, AlcoholToSugarRatio),
+    pHToAcidityRatio = ifelse(is.infinite(pHToAcidityRatio), NA, pHToAcidityRatio),
+    
+    # Ensure log-transformed variables are valid
+    log_Alcohol = ifelse(is.na(log_Alcohol) | is.infinite(log_Alcohol), 
+                        log(Alcohol + 1), log_Alcohol),
+    log_TotalSulfurDioxide = ifelse(is.na(log_TotalSulfurDioxide) | is.infinite(log_TotalSulfurDioxide), 
+                                   log(TotalSulfurDioxide + 1), log_TotalSulfurDioxide),
+    log_FreeSulfurDioxide = ifelse(is.na(log_FreeSulfurDioxide) | is.infinite(log_FreeSulfurDioxide), 
+                                  log(FreeSulfurDioxide + 1), log_FreeSulfurDioxide),
+    log_ResidualSugar = ifelse(is.na(log_ResidualSugar) | is.infinite(log_ResidualSugar), 
+                              log(ResidualSugar + 1), log_ResidualSugar),
+    
+    # Ensure all variables are numeric
+    across(all_of(problem_vars), as.numeric)
+  )
+
+# Final imputation for any remaining NA values
+cat("\nPerforming final imputation for remaining NA values:\n")
+imputed_data <- mice(final_training_data, m=1, maxit=50, method='pmm', seed=500)
+final_training_data <- complete(imputed_data)
+
+# Verify all problematic values are handled
+cat("\nVerifying problematic values are handled:\n")
+for(var in problem_vars) {
+  cat("\nChecking", var, "after cleaning:\n")
+  cat("NA count:", sum(is.na(final_training_data[[var]])), "\n")
+  cat("NaN count:", sum(is.nan(final_training_data[[var]])), "\n")
+  cat("Inf count:", sum(is.infinite(final_training_data[[var]])), "\n")
+}
+
+# Save evaluation data
 final_evaluation_data <- clean_wine_evaluation_data
 
 cat("\nData preparation complete. Datasets are ready for modeling.\n")
@@ -831,3 +903,95 @@ cat("\nData preparation complete. Datasets are ready for modeling.\n")
 After reviewing the final data check, we can proceed with modeling as the dataset is in good shape: while there are some minor NAs in engineered ratios (18-42 cases out of 12,795 observations) and extreme values in ratio variables, these are expected outcomes of chemical relationships in wine and won't significantly impact model performance. The core variables have been properly transformed, bucket distributions are reasonable, and all data types are correct. 
 
 The dataset's size (12,795 observations) provides sufficient data for robust modeling, and the time investment needed for additional cleaning would likely yield only marginal improvements. Therefore, we're ready to proceed with the modeling phase, where we can address any specific issues that might arise during model development.
+
+## **Build Models**
+## **Poisson Regression Models**
+
+Since our target variable `TARGET` represents the number of wine cases purchased (a count variable), Poisson regression is an appropriate choice. We'll build two different models focusing on the key factors that influence wine sales:
+
+1. A basic model using the most influential variables based on business context
+2. An enhanced model incorporating transformed variables and additional chemical interactions
+
+### **Model 1: Basic Poisson Regression**
+
+To establish a baseline, we fit a Poisson regression model using key predictors identified from the exploratory analysis, including `STARS`, `LabelAppeal`, `Alcohol`, `TotalSulfurDioxide`, `FreeSulfurDioxide`, `ResidualSugar`, `pH`, and `AcidIndex`. This model assumes the Poisson distribution is appropriate for the count-based target variable (`TARGET`).  
+
+```{r, echo=FALSE}
+library(MASS)
+library(pscl)
+library(ggplot2)
+library(dplyr)
+library(AER)  # Added for dispersiontest
+
+# Fit the basic model
+basic_poisson <- glm(TARGET ~ STARS + LabelAppeal + Alcohol + 
+                     TotalSulfurDioxide + FreeSulfurDioxide + 
+                     ResidualSugar + pH + AcidIndex,
+                   data = final_training_data,
+                   family = poisson(link = "log"))
+
+# Model summary
+cat("Basic Poisson Regression Model Summary:\n")
+summary(basic_poisson)
+
+# Check for overdispersion
+cat("\nOverdispersion Test for Basic Model:\n")
+dispersiontest(basic_poisson)
+
+# Residual plots
+par(mfrow = c(2, 2))
+plot(basic_poisson, which = 1:4)
+
+# Calculate predictions
+predictions_basic <- predict(basic_poisson, type = "response")
+
+# Calculate performance metrics
+rmse_basic <- sqrt(mean((final_training_data$TARGET - predictions_basic)^2))
+mae_basic <- mean(abs(final_training_data$TARGET - predictions_basic))
+
+cat("\nBasic Model Performance Metrics:\n")
+cat("RMSE:", rmse_basic, "\n")
+cat("MAE:", mae_basic, "\n")
+cat("AIC:", AIC(basic_poisson), "\n")
+```
+The basic Poisson model shows that `STARS`, `LabelAppeal`, `Alcohol`, `TotalSulfurDioxide`, and `AcidIndex` are statistically significant predictors of the wine rating (`TARGET`), with very small p-values. `ResidualSugar`, `FreeSulfurDioxide`, and `pH` have weaker or borderline effects. The overdispersion test indicates no significant overdispersion (dispersion ≈ 0.89, p-value = 1), suggesting the Poisson model assumptions are acceptable. Model performance metrics (RMSE = 1.39, MAE = 1.13) indicate reasonable prediction accuracy, but there is room for improvement.
+
+### **Model 2: Enhanced Poisson Regression**
+After evaluating the basic model, we enhanced the Poisson regression by incorporating log-transformed chemical features and engineered interaction variables. These additions aim to capture nonlinear effects and improve model fit while maintaining interpretability. The following code fits the enhanced model and evaluates its performance.
+
+```{r, echo=FALSE}
+# Fit the enhanced model
+enhanced_poisson <- glm(TARGET ~ STARS + LabelAppeal + 
+                        log_Alcohol + log_TotalSulfurDioxide + 
+                        log_FreeSulfurDioxide + log_ResidualSugar + 
+                        TotalAcidity + AcidityRatio + 
+                        SulfurToAcidRatio + AlcoholToSugarRatio + 
+                        pHToAcidityRatio + AcidIndex,
+                      data = final_training_data,
+                      family = poisson(link = "log"))
+
+# Model summary
+cat("Enhanced Poisson Regression Model Summary:\n")
+summary(enhanced_poisson)
+
+# Check for overdispersion
+cat("\nOverdispersion Test for Enhanced Model:\n")
+dispersiontest(enhanced_poisson)
+
+# Residual plots
+par(mfrow = c(2, 2))
+plot(enhanced_poisson, which = 1:4)
+
+# Calculate predictions
+predictions_enhanced <- predict(enhanced_poisson, type = "response")
+
+# Calculate performance metrics
+rmse_enhanced <- sqrt(mean((final_training_data$TARGET - predictions_enhanced)^2))
+mae_enhanced <- mean(abs(final_training_data$TARGET - predictions_enhanced))
+
+cat("\nEnhanced Model Performance Metrics:\n")
+cat("RMSE:", rmse_enhanced, "\n")
+cat("MAE:", mae_enhanced, "\n")
+cat("AIC:", AIC(enhanced_poisson), "\n")
+```
+Compared to the basic model, the enhanced Poisson regression achieved lower RMSE (1.395 vs. 1.397), slightly improved MAE (1.133 vs. 1.134), and a meaningful reduction in AIC (47167 vs. 47207). No overdispersion was detected in either model. The improvements, though modest in error metrics, demonstrate that feature engineering and log transformations captured important nonlinear relationships, strengthening the overall model. Therefore, the enhanced model was selected for subsequent analysis.

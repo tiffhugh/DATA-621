@@ -1145,18 +1145,32 @@ The enhanced multiple linear regression model slightly improves model fit over t
 
 However, some engineered ratios like AlcoholToSugarRatio and SulfurToAcidRatio did not significantly contribute, suggesting that while feature engineering adds value, careful selection is still important.
 
+Absolutely — I’ll make it match the style of your previous sections. Here's your full **Zero-Inflated Models** section ready to copy-paste:
+
+## **Zero-Inflated Regression Models (Optional Exploration)**
+
+While zero-inflated Poisson (ZIP) and zero-inflated Negative Binomial (ZINB) models were not required for this assignment, we explored them briefly to check if accounting for excess zeros could improve model performance. Given that the TARGET variable (number of wine cases purchased) could plausibly include many zeros, this was a reasonable area to investigate.
+
+We first fit a zero-inflated Poisson model using the same predictors as the basic Poisson regression. The `pscl` package's `zeroinfl()` function was used for this task.
+
+### **Model 1: Zero-Inflated Poisson (ZIP) Regression**
+
 ```{r, echo=FALSE}
 library(pscl)
 
-# Zero-inflated Poisson model
+# Fit the Zero-Inflated Poisson model
 zip_model <- zeroinfl(TARGET ~ STARS + LabelAppeal + Alcohol + TotalSulfurDioxide + 
                       FreeSulfurDioxide + ResidualSugar + pH + AcidIndex | 1,
                       data = final_training_data, dist = "poisson")
 
+# Model summary
+cat("Zero-Inflated Poisson Regression Model Summary:\n")
 summary(zip_model)
 
-# Performance metrics
+# Calculate predictions
 predictions_zip <- predict(zip_model)
+
+# Calculate performance metrics
 rmse_zip <- sqrt(mean((final_training_data$TARGET - predictions_zip)^2))
 mae_zip <- mean(abs(final_training_data$TARGET - predictions_zip))
 
@@ -1164,5 +1178,53 @@ cat("\nZIP Model Performance Metrics:\n")
 cat("RMSE:", rmse_zip, "\n")
 cat("MAE:", mae_zip, "\n")
 cat("AIC:", AIC(zip_model), "\n")
-
 ```
+The Zero-Inflated Poisson (ZIP) model produced a higher RMSE (1.48) and MAE (1.21) compared to the basic and enhanced Poisson models (which had RMSE around 1.39 and MAE around 1.13). The AIC (45933) was also higher than the enhanced linear models but lower than the basic Poisson models, indicating mixed performance.
+
+Most key predictors, such as STARS, LabelAppeal, Alcohol, and AcidIndex, remained highly significant. However, the higher prediction errors suggest that zero-inflation did not meaningfully improve model performance in this case. This supports the conclusion that standard Poisson and Negative Binomial models were sufficient for this dataset.
+
+### **Zero-Inflated Negative Binomial Regression Models**
+
+While our zero-inflated Poisson model showed limited improvement, we also explored a Zero-Inflated Negative Binomial (ZINB) model. This allows even more flexibility by modeling overdispersion separately from excess zeros. Testing both ZIP and ZINB models ensures we leave no major modeling approach unexplored.
+
+#### **Model: Zero-Inflated Negative Binomial Regression**
+
+```{r, echo=FALSE}
+library(pscl)
+
+# Fit the ZINB model
+zinb_model <- zeroinfl(TARGET ~ STARS + LabelAppeal + Alcohol + TotalSulfurDioxide + 
+                       FreeSulfurDioxide + ResidualSugar + pH + AcidIndex | 1, 
+                       data = final_training_data, 
+                       dist = "negbin")
+
+# Model summary
+cat("Zero-Inflated Negative Binomial Regression Model Summary:\n")
+summary(zinb_model)
+
+# Calculate predictions
+predictions_zinb <- predict(zinb_model, type = "response")
+
+# Calculate performance metrics
+rmse_zinb <- sqrt(mean((final_training_data$TARGET - predictions_zinb)^2))
+mae_zinb <- mean(abs(final_training_data$TARGET - predictions_zinb))
+
+cat("\nZINB Model Performance Metrics:\n")
+cat("RMSE:", rmse_zinb, "\n")
+cat("MAE:", mae_zinb, "\n")
+cat("AIC:", AIC(zinb_model), "\n")
+```
+The ZINB model achieved an RMSE of 1.4802, an MAE of 1.2066, and an AIC of 45934.95. These results are extremely similar to the ZIP model, suggesting that the additional flexibility offered by the negative binomial structure did not substantially improve the model fit. Key predictors such as STARS, LabelAppeal, Alcohol, and AcidIndex remained highly significant. The zero-inflation component showed a significant intercept, indicating some propensity for excess zeros, but the overall model performance remained slightly worse than standard Poisson and Negative Binomial regressions.
+
+Thus, while exploring ZINB was methodologically appropriate, it was not selected as the final model due to no material performance improvement.
+
+### **Conclusion of Build Models Section**
+
+Across all modeling approaches—Poisson, Negative Binomial, Multiple Linear Regression, and Zero-Inflated models—several key insights emerged consistently:
+
+- **Poisson and Negative Binomial models** were both appropriate for the count-based nature of the target variable, and showed no serious overdispersion.  
+- **Enhanced models** that incorporated transformed variables (log transformations) and engineered features (like AcidityRatio) slightly improved predictive performance over basic models across all techniques.
+- **Multiple Linear Regression models** performed competitively in terms of RMSE and MAE but had lower interpretability and theoretical appropriateness for count data compared to Poisson-based models.
+- **Zero-Inflated models** (ZIP and ZINB) did not provide significant gains in predictive accuracy, suggesting that the dataset did not suffer heavily from excess zeros.
+
+In summary, the **Enhanced Poisson and Enhanced Negative Binomial models** provided the best combination of predictive accuracy (RMSE ≈ 1.395, MAE ≈ 1.133) and theoretical soundness for this problem. While linear regression and zero-inflated models were explored for completeness, the core Poisson-based models were ultimately the most appropriate for final model selection.

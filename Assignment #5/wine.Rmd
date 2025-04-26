@@ -1144,3 +1144,25 @@ plot(enhanced_lm)
 The enhanced multiple linear regression model slightly improves model fit over the basic version, as shown by a lower RMSE (1.399 vs. 1.403) and MAE (1.126 vs. 1.130). The AIC also dropped from 45006 to 44951, indicating a more efficient model despite the increased number of predictors. Key variables like log_Alcohol, log_TotalSulfurDioxide, and AcidIndex remain highly significant, confirming their strong predictive influence. 
 
 However, some engineered ratios like AlcoholToSugarRatio and SulfurToAcidRatio did not significantly contribute, suggesting that while feature engineering adds value, careful selection is still important.
+
+```{r, echo=FALSE}
+library(pscl)
+
+# Zero-inflated Poisson model
+zip_model <- zeroinfl(TARGET ~ STARS + LabelAppeal + Alcohol + TotalSulfurDioxide + 
+                      FreeSulfurDioxide + ResidualSugar + pH + AcidIndex | 1,
+                      data = final_training_data, dist = "poisson")
+
+summary(zip_model)
+
+# Performance metrics
+predictions_zip <- predict(zip_model)
+rmse_zip <- sqrt(mean((final_training_data$TARGET - predictions_zip)^2))
+mae_zip <- mean(abs(final_training_data$TARGET - predictions_zip))
+
+cat("\nZIP Model Performance Metrics:\n")
+cat("RMSE:", rmse_zip, "\n")
+cat("MAE:", mae_zip, "\n")
+cat("AIC:", AIC(zip_model), "\n")
+
+```

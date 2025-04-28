@@ -274,6 +274,77 @@ parsed_data <- fromJSON(clean_data)
 # View parsed data
 parsed_data
 ```
+
+----------------------------------------------------------------------------
+```{r, echo=FALSE}
+library(jsonlite)
+library(stringr)
+library(purrr)
+library(dplyr)
+library(rlang) # For %||% operator
+
+# First, define the get_attribute function
+get_attribute <- function(parsed, attribute_name) {
+  if (is.list(parsed)) {
+    parsed[[attribute_name]] %||% NA
+  } else {
+    NA
+  }
+}
+
+# Improved JSON cleaning function
+clean_json <- function(json_str) {
+  if (is.na(json_str) || json_str == "") return(NA)
+  
+  # Standardize formatting
+  json_str <- json_str %>%
+    str_replace_all("'", "\"") %>%          # Replace single with double quotes
+    str_replace_all("u\"", "\"") %>%        # Remove Unicode markers
+    str_replace_all("True", "true") %>%     # Standardize booleans
+    str_replace_all("False", "false") %>%
+    str_replace_all("None", "null") %>%     # Standardize nulls
+    str_replace_all("NaN", "null") %>%
+    str_replace_all(":\\s*\"\\s*\\{\\s*\"", ": {") %>%  # Fix nested JSON
+    str_replace_all("\\\"\\s*\\}\\s*\"", "}")           # Fix nested JSON closures
+  
+  # Parse with error handling
+  tryCatch({
+    parsed <- fromJSON(json_str, simplifyDataFrame = FALSE)
+    if (length(parsed) == 0) NA else parsed
+  }, error = function(e) {
+    warning(paste("Failed to parse:", json_str))
+    NA
+  })
+}
+```
+
+```{r}
+
+# Apply to attributes column
+yelp_processed <- yelp_processed %>%
+  mutate(attributes_parsed = map(attributes, clean_json))
+
+# Now safely extract attributes
+yelp_processed <- yelp_processed %>%
+  mutate(
+    has_wifi = map_lgl(attributes_parsed, ~ {
+      wifi <- get_attribute(.x, "WiFi")
+      !is.na(wifi) && (isTRUE(wifi) || wifi == "free" || wifi == "true")
+    }),
+    offers_delivery = map_lgl(attributes_parsed, ~ {
+      delivery <- get_attribute(.x, "RestaurantsDelivery")
+      isTRUE(delivery) || delivery == "True" || delivery == "true"
+    }),
+    price_range = map_int(attributes_parsed, ~ {
+      pr <- get_attribute(.x, "RestaurantsPriceRange2")
+      if (is.na(pr)) NA_integer_ else as.integer(pr)
+    })
+  )
+```
+
+```{r}
+# Check results
+glimpse(yelp_processed %>% select(has_wifi, offers_delivery, price_range))
 ```
 
 

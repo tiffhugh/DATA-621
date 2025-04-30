@@ -1296,3 +1296,174 @@ On the evaluation dataset, the first few predictions were:
 | 6            | 5.52            |
 
 The model predicts reasonable case sales based on wine quality features and generalizes well to new data.
+
+## **Code Appendix**
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(tidy.opts = list(width.cutoff = 50), tidy = TRUE, warning = FALSE)
+```
+
+```{r, include=FALSE}
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(tidyr)
+library(purrr)
+library(DataExplorer)
+library(reshape2)
+library(pROC)
+library(readr)
+library(caret)
+library(DHARMa)
+library(lares)
+library(mice)
+library(gridExtra)
+
+wine_training_data <- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/Assignment%20%235/wine-training-data.csv")
+wine_evaluation_data <- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/Assignment%20%235/wine-evaluation-data.csv")
+```
+
+```{r}
+wine_training_data <- wine_training_data %>% 
+  mutate(across(-LabelAppeal, ~gsub("-", "", .x)))
+wine_evaluation_data <- wine_evaluation_data %>%
+  mutate(across(-LabelAppeal, ~gsub("-", "", .x)))
+```
+
+```{r}
+wine_training_data <- wine_training_data %>% 
+  mutate(
+    across(c(TARGET, FixedAcidity, VolatileAcidity, CitricAcid, 
+             ResidualSugar, Chlorides, FreeSulfurDioxide, TotalSulfurDioxide, 
+             Density, pH, Sulphates, Alcohol, AcidIndex), as.numeric),
+    across(c(STARS, LabelAppeal), as.ordered)
+  )
+wine_evaluation_data <- wine_evaluation_data %>% 
+  mutate(
+    across(c(TARGET, FixedAcidity, VolatileAcidity, CitricAcid, 
+             ResidualSugar, Chlorides, FreeSulfurDioxide, TotalSulfurDioxide, 
+             Density, pH, Sulphates, Alcohol, AcidIndex), as.numeric),
+    across(c(STARS, LabelAppeal), as.ordered)
+  )
+```
+
+```{r}
+wine_training_data <- wine_training_data %>%
+  mutate(
+    FixedAcidity = ifelse(FixedAcidity > 16, NA, FixedAcidity),
+    FreeSulfurDioxide = ifelse(FreeSulfurDioxide > 350, NA, FreeSulfurDioxide),
+    TotalSulfurDioxide = ifelse(TotalSulfurDioxide > 350, NA, TotalSulfurDioxide)
+  )
+wine_evaluation_data <- wine_evaluation_data %>%
+  mutate(
+    FixedAcidity = ifelse(FixedAcidity > 16, NA, FixedAcidity),
+    FreeSulfurDioxide = ifelse(FreeSulfurDioxide > 350, NA, FreeSulfurDioxide),
+    TotalSulfurDioxide = ifelse(TotalSulfurDioxide > 350, NA, TotalSulfurDioxide)
+  )
+```
+
+```{r}
+input_training = wine_training_data
+method_vector_train <- c("", "pmm", "", "", "pmm",
+                   "pmm", "pmm", "pmm", "", "pmm",
+                   "pmm", "pmm", "", "", "polr", "")
+mice_imp_train = mice(input_training, m = 5, method = method_vector_train)
+clean_wine_training_data <- complete(mice_imp_train, 3)
+
+input_evaluation <- wine_evaluation_data
+
+# Let mice determine default method structure
+init_eval <- mice(input_evaluation, maxit = 0)
+method_vector_eval <- init_eval$method
+
+# Override only the columns that need imputation
+method_vector_eval["ResidualSugar"] <- "pmm"
+method_vector_eval["Chlorides"] <- "pmm"
+method_vector_eval["FreeSulfurDioxide"] <- "pmm"
+method_vector_eval["pH"] <- "pmm"
+method_vector_eval["Sulphates"] <- "pmm"
+method_vector_eval["Alcohol"] <- "pmm"
+method_vector_eval["STARS"] <- "polr"
+
+# Perform imputation
+mice_imp_eval <- mice(input_evaluation, m = 5, method = method_vector_eval)
+clean_wine_evaluation_data <- complete(mice_imp_eval, 3)
+
+```
+```{r}
+clean_wine_training_data <- clean_wine_training_data %>%
+  mutate(
+    TotalAcidity = FixedAcidity + VolatileAcidity + CitricAcid,
+    AcidityRatio = ifelse(VolatileAcidity > 0, FixedAcidity / VolatileAcidity, NA),
+    CitricToFixedRatio = ifelse(FixedAcidity > 0, CitricAcid / FixedAcidity, NA),
+    FreeToTotalSulfurRatio = ifelse(TotalSulfurDioxide > 0, FreeSulfurDioxide / TotalSulfurDioxide, NA),
+    SulfurToAcidRatio = TotalSulfurDioxide / TotalAcidity,
+    AlcoholToSugarRatio = ifelse(ResidualSugar > 0, Alcohol / ResidualSugar, NA),
+    SulfateToChlorideRatio = ifelse(Chlorides > 0, Sulphates / Chlorides, NA),
+    pHToAcidityRatio = pH / TotalAcidity
+  )
+```
+
+```{r}
+final_training_data <- clean_wine_training_data %>%
+  dplyr::select(
+    TARGET, STARS, LabelAppeal, Alcohol, TotalSulfurDioxide, 
+    FreeSulfurDioxide, ResidualSugar, pH, AcidIndex,
+    TotalAcidity, AcidityRatio, SulfurToAcidRatio, 
+    AlcoholToSugarRatio, pHToAcidityRatio
+  )
+```
+
+```{r}
+final_training_data <- final_training_data %>%
+  mutate(
+    AcidityRatio = ifelse(is.infinite(AcidityRatio), NA, AcidityRatio),
+    SulfurToAcidRatio = ifelse(is.infinite(SulfurToAcidRatio), NA, SulfurToAcidRatio),
+    AlcoholToSugarRatio = ifelse(is.infinite(AlcoholToSugarRatio), NA, AlcoholToSugarRatio),
+    pHToAcidityRatio = ifelse(is.infinite(pHToAcidityRatio), NA, pHToAcidityRatio)
+  )
+imputed_data <- mice(final_training_data, m = 1, maxit = 50, method = 'pmm', seed = 500)
+final_training_data <- complete(imputed_data)
+```
+
+```{r}
+basic_poisson <- glm(TARGET ~ STARS + LabelAppeal + Alcohol + 
+                     TotalSulfurDioxide + FreeSulfurDioxide + 
+                     ResidualSugar + pH + AcidIndex,
+                   data = final_training_data,
+                   family = poisson(link = "log"))
+summary(basic_poisson)
+```
+
+```{r}
+enhanced_poisson <- glm(TARGET ~ STARS + LabelAppeal + 
+                        log(Alcohol + 1) + log(TotalSulfurDioxide + 1) + 
+                        log(FreeSulfurDioxide + 1) + log(ResidualSugar + 1) + 
+                        TotalAcidity + AcidityRatio + 
+                        SulfurToAcidRatio + AlcoholToSugarRatio + 
+                        pHToAcidityRatio + AcidIndex,
+                      data = final_training_data,
+                      family = poisson(link = "log"))
+summary(enhanced_poisson)
+```
+
+```{r}
+final_evaluation_data <- clean_wine_evaluation_data %>%
+  mutate(
+    # Log transforms
+    log_Alcohol = log(Alcohol + 1),
+    log_TotalSulfurDioxide = log(TotalSulfurDioxide + 1),
+    log_FreeSulfurDioxide = log(FreeSulfurDioxide + 1),
+    log_ResidualSugar = log(ResidualSugar + 1),
+
+    # Engineered features
+    TotalAcidity = FixedAcidity + VolatileAcidity + CitricAcid,
+    AcidityRatio = ifelse(VolatileAcidity > 0, FixedAcidity / VolatileAcidity, NA),
+    SulfurToAcidRatio = TotalSulfurDioxide / (FixedAcidity + VolatileAcidity + CitricAcid),
+    AlcoholToSugarRatio = ifelse(ResidualSugar > 0, Alcohol / ResidualSugar, NA),
+    pHToAcidityRatio = pH / (FixedAcidity + VolatileAcidity + CitricAcid)
+  )
+
+eval_preds <- predict(enhanced_poisson, newdata = final_evaluation_data, type = "response")
+head(eval_preds)
+```

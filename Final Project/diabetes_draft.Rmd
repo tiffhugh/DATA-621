@@ -156,55 +156,6 @@ summary(diabetes_evaluation_data)
 corr_cross(diabetes_training_data, 
            method = "spearman", max_pvalue = 0.05, top = 20)
 ```
-
-```{r, echo=FALSE}
-library(mgcv)
-str(diabetes_training_data)
-
-model1 <- gam(target ~ s(bmi) + s(fasting_blood_glucose) + s(cholesterol_total) +
-               +s(ggt) + s(serum_urate) + s(dietary_intake_calories)
-               , data = diabetes_training_data)
-summary(model1)
-plot(model1)
-```
-
-```{r, echo=FALSE}
-model2 <- gam(target ~ s(bmi) + s(fasting_blood_glucose) + s(cholesterol_total) +
-                s(dietary_intake_calories) + physical_activity_level + 
-                alcohol_consumption + smoking_status + ethnicity + s(age) + sex +
-                family_history_of_diabetes + s(blood_pressure_systolic) +
-                s(blood_pressure_diastolic) + s(cholesterol_hdl) +
-                s(cholesterol_ldl) + s(ggt) + s(serum_urate) +
-                 previous_gestational_diabetes
-               , data = diabetes_training_data)
-summary(model2)
-plot(model2)
-```
-
-```{r, echo=FALSE}
-model3 <- gam(target ~ s(fasting_blood_glucose) + s(cholesterol_total) +
-                s(cholesterol_hdl), 
-              data = diabetes_training_data)
-summary(model3)
-plot(model3)
-```
-
-```{r, echo=FALSE}
-library(randomForest)
-rf_model <- randomForest(
-  target ~ age + sex + ethnicity + bmi + waist_circumference +
-    fasting_blood_glucose + blood_pressure_systolic + blood_pressure_diastolic +
-    cholesterol_total + cholesterol_hdl + cholesterol_ldl + ggt + serum_urate +
-    physical_activity_level + dietary_intake_calories + alcohol_consumption +
-    smoking_status + family_history_of_diabetes + previous_gestational_diabetes,
-  data = diabetes_training_data,
-  importance = TRUE,
-  ntree = 500
-)
-
-print(rf_model)
-
-# View numeric variable importance
 importance(rf_model)
 
 # Plot importance

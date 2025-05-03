@@ -1,0 +1,213 @@
+---
+title: "HW5"
+author: "Bedros, Haig; Dela Cruz, Sandra; Hugh, Tiffany; Li, Yanyi"
+date: "`r Sys.Date()`"
+output:
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+<style type="text/css">
+
+h1.title {
+  font-size: 26px;
+  color: Black;
+  text-align: center;
+}
+h4.author { 
+  font-size: 18px;
+  color: Black;
+  text-align: center;
+}
+h4.date {
+  font-size: 12px;
+  color: Black;
+  text-align: center;
+}
+</style>
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(tidy.opts = list(width.cutoff = 50), tidy = TRUE, warning = FALSE)
+```
+
+```{r, include=FALSE}
+# Load required packages
+library(dplyr)
+library(janitor)
+library(stringr)
+library(ggplot2)
+library(tidyr)
+library(purrr)
+library(DataExplorer)
+library(reshape2)
+library(pROC)
+library(readr)
+library(caret)
+library(DHARMa)
+library(lares)
+library(mice)
+library(gridExtra)
+```
+
+### **Data Exploration and Data Preparation**
+### **Initial Cleaning Before Splitting**
+1. Changed column names to snake format
+2. Assign hb_a1c as target variable
+3. Observe data types and detect missing values using summary, no missing values detected
+4. Correct variables data types
+```{r, echo=FALSE}
+# Read in the dataset
+diabetes_dataset <- read_csv("https://raw.githubusercontent.com/tiffhugh/DATA-621/refs/heads/main/Final%20Project/diabetes_dataset.csv", show_col_types = FALSE)
+
+# Convert column names to snake format
+diabetes_dataset <- diabetes_dataset |>
+  clean_names(case = "snake") |>
+  rename(target = hb_a1c, index = 1) |>
+  select(index, target, everything())
+
+# overview of variables
+summary(diabetes_dataset)
+
+# Correct variables data types
+diabetes_dataset <- diabetes_dataset |>  
+  mutate(
+    across(c(sex, ethnicity, smoking_status), as.factor),
+    across(c(family_history_of_diabetes, previous_gestational_diabetes),
+           ~ factor(.x, levels = c(0, 1), ordered = TRUE)),
+    physical_activity_level = factor(
+      physical_activity_level,
+      levels = c("Low", "Moderate", "High"),
+      ordered = TRUE
+    ),
+    alcohol_consumption = factor(
+      alcohol_consumption,
+      levels = c("None", "Moderate", "Heavy"),
+      ordered = TRUE
+    )
+  )
+
+# show corrected variables
+str(diabetes_dataset)
+
+
+
+plot_histogram(diabetes_dataset)
+plot_qq(diabetes_dataset)
+plot_bar(diabetes_dataset)
+colnames(diabetes_dataset)
+str(diabetes_dataset)
+glimpse(diabetes_dataset)
+```
+
+### **Split Dataset into Training and Evaluation**
+1. Split original dataset into 8:2
+2. Check the distribution of split
+3. Identified overlapping index, none identified
+```{r, echo=FALSE}
+# using caret package
+set.seed(621)
+train_target <- createDataPartition(diabetes_dataset$target, p = 0.8, list = FALSE)
+diabetes_training_data <- diabetes_dataset[train_target, ]
+diabetes_evaluation_data <- diabetes_dataset[-train_target, ]
+
+# check to ensure the distribution between the split
+ggplot(diabetes_dataset, aes(x = target, fill = "All")) +
+  geom_density(alpha = 0.3) +
+  geom_density(data = diabetes_training_data, aes(x = target, fill = "Train"), alpha = 0.5) +
+  geom_density(data = diabetes_evaluation_data, aes(x = target, fill = "Evaluation"), alpha = 0.5) +
+  labs(title = "Distribution of Target in Train vs Evaluation") +
+  theme_minimal()
+
+# Identify overlapping indices
+duplicates <- intersect(diabetes_training_data$index, diabetes_evaluation_data$index)
+
+# Output how many duplicates and optionally which ones
+if(length(duplicates) > 0) {
+  cat("Found", length(duplicates), "duplicate indices:\n")
+  print(duplicates)
+} else {
+  cat("✅ No duplicate indices between training and evaluation sets.\n")
+}
+```
+
+### **Exploration of Both Datasets**
+1. Remove index variable because we don't need it
+2. Have an overview of both datasets
+3. Prior to splitting the datasets into training and evaluation we already performed missing value evaluation and we also corrected the datatypes, and we see that after splitting it did not distort the datatypes.
+4. All variables seems to have an equal distribution of data and a parametric model might not be suitable for building a model so we might turn to non-parametric regression
+```{r, echo=FALSE}
+# remove index columns
+diabetes_training_data <- diabetes_training_data |> select(-index)
+str(diabetes_training_data)
+summary(diabetes_training_data)
+
+
+# do the same for evaluation data
+diabetes_evaluation_data <- diabetes_evaluation_data %>% select(-index)
+str(diabetes_evaluation_data)
+summary(diabetes_evaluation_data)
+```
+
+###**Visual Correlation of Variables**
+1. To visualize correlations of variables, we use the `corr_cross()` function from the `lares` package, which allows for an easy comparison. This will potentially help us to include potential features when building our model. We set the method to Spearman since most of our data is not normally distributed (s-shaped as seen in our qq-plot).
+```{r, echo=FALSE, message=FALSE}
+#| fig-height: 5
+#| fig-width: 10
+
+corr_cross(diabetes_training_data, 
+           method = "spearman", max_pvalue = 0.05, top = 20)
+```
+
+```{r, echo=FALSE}
+library(mgcv)
+str(diabetes_training_data)
+
+model1 <- gam(target ~ s(bmi) + s(fasting_blood_glucose) + s(cholesterol_total) +
+               +s(ggt) + s(serum_urate) + s(dietary_intake_calories)
+               , data = diabetes_training_data)
+summary(model1)
+plot(model1)
+```
+
+```{r, echo=FALSE}
+model2 <- gam(target ~ s(bmi) + s(fasting_blood_glucose) + s(cholesterol_total) +
+                s(dietary_intake_calories) + physical_activity_level + 
+                alcohol_consumption + smoking_status + ethnicity + s(age) + sex +
+                family_history_of_diabetes + s(blood_pressure_systolic) +
+                s(blood_pressure_diastolic) + s(cholesterol_hdl) +
+                s(cholesterol_ldl) + s(ggt) + s(serum_urate) +
+                 previous_gestational_diabetes
+               , data = diabetes_training_data)
+summary(model2)
+plot(model2)
+```
+
+```{r, echo=FALSE}
+model3 <- gam(target ~ s(fasting_blood_glucose) + s(cholesterol_total) +
+                s(cholesterol_hdl), 
+              data = diabetes_training_data)
+summary(model3)
+plot(model3)
+```
+
+```{r, echo=FALSE}
+library(randomForest)
+rf_model <- randomForest(
+  target ~ age + sex + ethnicity + bmi + waist_circumference +
+    fasting_blood_glucose + blood_pressure_systolic + blood_pressure_diastolic +
+    cholesterol_total + cholesterol_hdl + cholesterol_ldl + ggt + serum_urate +
+    physical_activity_level + dietary_intake_calories + alcohol_consumption +
+    smoking_status + family_history_of_diabetes + previous_gestational_diabetes,
+  data = diabetes_training_data,
+  importance = TRUE,
+  ntree = 500
+)
+
+print(rf_model)
+
+# View numeric variable importance
+importance(rf_model)
+
+# Plot importance
+varImpPlot(rf_model, main = "Variable Importance - Random Forest")
+
+```

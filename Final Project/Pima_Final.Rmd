@@ -1,0 +1,308 @@
+---
+title: "HW5 - Enhanced Diabetes Prediction"
+author: "Bedros, Haig; Dela Cruz, Sandra; Hugh, Tiffany; Li, Yanyi"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    theme: cosmo
+    highlight: tango
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+<style type="text/css">
+h1.title {
+  font-size: 26px;
+  color: Black;
+  text-align: center;
+}
+h4.author { 
+  font-size: 18px;
+  color: Black;
+  text-align: center;
+}
+h4.date {
+  font-size: 12px;
+  color: Black;
+  text-align: center;
+}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(tidy.opts = list(width.cutoff = 50), tidy = TRUE, warning = FALSE, message = FALSE)
+```
+
+```{r}
+# Load required packages
+library(pdp)
+library(tidyverse)
+library(kableExtra)
+library(missForest)
+library(caret)
+library(mice)
+library(recipes)
+library(GGally)
+library(randomForest)
+library(xgboost)
+library(glmnet)
+library(e1071)
+library(kernlab)
+library(pROC)
+library(DALEX)
+library(ggpubr)
+```
+
+# **Introduction**
+
+This enhanced analysis predicts diabetes using the Pima Indians Diabetes dataset with multiple machine learning models and improved preprocessing.
+
+### **Variables:**
+
+**pregnant:** Number of times pregnant
+**glucose:** Plasma glucose concentration
+**pressure:** Diastolic blood pressure (mm Hg)
+**triceps:** Triceps skin fold thickness (mm)
+**insulin:** 2-Hour serum insulin (mu U/ml)
+**mass:** Body mass index (weight in kg/(height in m)^2)
+**pedigree:** Diabetes pedigree function
+**age:** Age (years)
+**diabetes:** Factor indicating diabetes test result (neg/pos)
+
+## **Data Exploration and Data Preparation**
+
+**Load Data**
+
+```{r}
+# Load data
+data(pima)
+pima1 <- pima %>% 
+  rename(bmi = mass) %>%
+  mutate(diabetes = factor(diabetes, levels = c("neg", "pos"), 
+                          labels = c("Negative", "Positive")))
+
+# Check structure
+glimpse(pima1)
+```
+
+**Summary Statistics**
+
+```{r}
+# Enhanced summary with missing value check
+summary_stats <- pima1 %>%
+  select(-diabetes) %>%
+  gather(variable, value) %>%
+  group_by(variable) %>%
+  summarise(
+    mean = mean(value, na.rm = TRUE),
+    sd = sd(value, na.rm = TRUE),
+    min = min(value, na.rm = TRUE),
+    q25 = quantile(value, 0.25, na.rm = TRUE),
+    median = median(value, na.rm = TRUE),
+    q75 = quantile(value, 0.75, na.rm = TRUE),
+    max = max(value, na.rm = TRUE),
+    missing = sum(is.na(value)),
+    zeros = sum(value == 0, na.rm = TRUE)
+  )
+
+summary_stats %>%
+  kable(format = "html", caption = "Detailed Summary Statistics") %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+    full_width = FALSE,
+    position = "center"
+  ) %>%
+  row_spec(0, bold = TRUE, color = "lightgrey", background = "#4C6A9C") %>%
+  column_spec(1, bold = TRUE) %>%
+  add_header_above(c("Variable" = 1, "Numeric Statistics" = 7, "Counts" = 2))
+```
+
+**Impute Missing values**
+
+```{r}
+# Handle biological zeros (replace with NA)
+pima_clean <- pima1 %>%
+  mutate(
+    glucose = ifelse(glucose == 0, NA, glucose),
+    pressure = ifelse(pressure == 0, NA, pressure),
+    triceps = ifelse(triceps == 0, NA, triceps),
+    insulin = ifelse(insulin == 0, NA, insulin),
+    bmi = ifelse(bmi == 0, NA, bmi)
+  )
+
+# Impute missing values using random forest imputation
+set.seed(1048)
+pima_imputed <- missForest(pima_clean)$ximp
+```
+
+**Feature Engineering**
+
+```{r}
+# Feature engineering
+pima_processed <- pima_imputed %>%
+  mutate(
+    glucose_cat = cut(glucose, breaks = c(0, 99, 125, 300),
+                      labels = c("Normal", "Prediabetes", "Diabetes")),
+    bmi_cat = cut(bmi, breaks = c(0, 18.5, 25, 30, 100),
+                  labels = c("Underweight", "Normal", "Overweight", "Obese")),
+    age_group = cut(age, breaks = c(20, 30, 40, 50, 100),
+                    labels = c("20-29", "30-39", "40-49", "50+"))
+  )
+```
+
+## **Data Splitting and Preprocessing**
+
+**Stratified Splitting**
+
+```{r}
+# Stratified splitting to maintain class balance
+set.seed(1048)
+train_index <- createDataPartition(pima_processed$diabetes, p = 0.8, list = FALSE)
+train_data <- pima_processed[train_index, ]
+test_data <- pima_processed[-train_index, ]
+```
+
+**Preprocessing Recipe**
+
+```{r}
+# Enhanced preprocessing recipe
+preproc_recipe <- recipe(diabetes ~ ., data = train_data) %>%
+  step_normalize(all_numeric_predictors()) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_corr(all_predictors(), threshold = 0.9) %>%
+  step_nzv(all_predictors()) %>%
+  step_center(all_predictors()) %>%
+  step_scale(all_predictors())
+```
+
+**Apply Recipe**
+
+```{r}
+# Prepare and apply recipe
+prepped_recipe <- prep(preproc_recipe, training = train_data)
+train_preprocessed <- bake(prepped_recipe, new_data = train_data)
+test_preprocessed <- bake(prepped_recipe, new_data = test_data)
+```
+
+## **Multiple Model Implementation**
+
+**Create Consistent trainControl**
+
+```{r}
+ctrl <- trainControl(
+  method = "cv",        # Cross-validation
+  number = 5,          # 5 folds
+  savePredictions = "final",
+  classProbs = TRUE,   # For classification
+  summaryFunction = twoClassSummary
+)
+```
+
+### **Random Forest (Optimized)**
+
+```{r}
+# Set up tuning grid
+rf_grid <- expand.grid(
+  mtry = c(2, 4, 6),
+  splitrule = c("gini", "extratrees"),
+  min.node.size = c(1, 5, 10)
+)
+
+# Train with custom tuning
+set.seed(1048)
+rf_model <- train(diabetes ~ ., data = train_preprocessed, 
+                 method = "rf", trControl = ctrl)
+
+# Evaluate
+rf_pred <- predict(rf_model, test_preprocessed)
+rf_prob <- predict(rf_model, test_preprocessed, type = "prob")[, "Positive"]
+confusionMatrix(rf_pred, test_preprocessed$diabetes)
+```
+### **XGBoost (Gradient Boosting)**
+
+```{r warning=FALSE}
+# XGBoost model
+set.seed(1048)
+xgb_model <- train(
+  diabetes ~ .,
+  data = train_preprocessed,
+  method = "xgbTree",
+  trControl = ctrl,
+  tuneGrid = expand.grid(
+    nrounds = 100,
+    max_depth = 6,
+    eta = 0.3,
+    gamma = 0,
+    colsample_bytree = 1,
+    min_child_weight = 1,
+    subsample = 1
+  ),
+  metric = "ROC"
+)
+
+# Evaluate
+xgb_pred <- predict(xgb_model, test_preprocessed)
+confusionMatrix(xgb_pred, test_preprocessed$diabetes)
+```
+
+### **Regularized Logistic Regression**
+
+```{r}
+# Elastic Net model
+set.seed(1048)
+glmnet_model <- train(diabetes ~ ., data = train_preprocessed,
+             method = "glmnet", trControl = ctrl)
+# Evaluate
+glmnet_pred <- predict(glmnet_model, test_preprocessed)
+confusionMatrix(glmnet_pred, test_preprocessed$diabetes)
+```
+
+### **Support Vector Machine (SVM)**
+
+```{r}
+# SVM with radial kernel
+set.seed(1048)
+svm_model <- train(diabetes ~ ., data = train_preprocessed,
+             method = "svmRadial", trControl = ctrl)
+
+# Evaluate
+svm_pred <- predict(svm_model, test_preprocessed)
+confusionMatrix(svm_pred, test_preprocessed$diabetes)
+```
+
+## **Model Comparison and Selection**
+
+**Summarize Results**
+
+```{r}
+# Create model list
+models <- list(
+  RandomForest = rf_model,
+  XGBoost = xgb_model,
+  LogisticRegression = glmnet_model,
+  SVM = svm_model
+)
+
+# Collect resamples
+results <- resamples(models)
+
+# Summarize results
+summary(results)
+```
+
+**Visualization of Results**
+
+```{r}
+# Visualize results
+bwplot(results)
+```
+
+```{r}
+dotplot(results, metric = "ROC")
+```
+
+## **Conclusion
+
+
